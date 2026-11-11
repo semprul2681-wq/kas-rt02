@@ -4,6 +4,11 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>Buku Kas &amp; Ronda RT 02 / RW 10</title>
+<meta name="theme-color" content="#173F34">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" type="image/png" href="icon-192.png">
+<link rel="apple-touch-icon" href="apple-touch-icon.png">
+<meta name="apple-mobile-web-app-title" content="Kas RT02">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Bitter:wght@600;700&family=Public+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
@@ -31,6 +36,7 @@ small{color:var(--tinta2)}
 .nav .gap{flex:1}
 .nav .usr{font-size:.85rem;padding:10px 12px;border-top:1px solid rgba(255,255,255,.2)}
 .nav .usr button{margin-top:6px;background:transparent;border:1px solid rgba(255,255,255,.5);color:var(--onnav);border-radius:3px;padding:4px 10px;cursor:pointer}
+.nav a.kunci{opacity:.55}
 .nav .nxt{font-size:.8rem;padding:6px 12px;background:var(--stabilo);color:var(--onstabilo);border-radius:3px;margin:6px 0}
 main{padding:22px 28px 60px;max-width:1240px;width:100%}
 .ph{display:flex;flex-wrap:wrap;gap:10px;align-items:flex-end;justify-content:space-between;margin-bottom:16px}
@@ -234,7 +240,7 @@ function cacheLocal(){sset(KEY,JSON.stringify(db))}
 function simpan(){cacheLocal();schedulePush()}
 
 /* ================= data awal ================= */
-function defSettings(){return{nama:'',rt:'02',rw:'10',kelurahan:'',kecamatan:'',kota:'',alamat:'',periode:'',ketua:'',wakil:'',bendahara:'',sekretaris:'',ketuaRW:'',koordinator:'',koordinatorHp:'',iuran:50000,denda:20000,batasBayar:10,saldoAwal:0,saldoAwalTgl:'',tahunMulai:curY(),kategori:['Kebersihan & kerja bakti','Keamanan & ronda','Sosial & santunan','Perayaan & kegiatan warga','Perbaikan fasilitas','Konsumsi rapat','ATK & administrasi','Lain-lain'],kategoriMasuk:['Sumbangan warga','Donasi','Sewa aset RT','Lain-lain'],kelompok:['Kelompok 1','Kelompok 2','Kelompok 3'],sesi:['22:00–01:00','01:00–04:00'],pinSuper:'123456'}}
+function defSettings(){return{nama:'',rt:'02',rw:'10',kelurahan:'',kecamatan:'',kota:'',alamat:'',periode:'',ketua:'',wakil:'',bendahara:'',sekretaris:'',ketuaRW:'',koordinator:'',koordinatorHp:'',iuran:50000,denda:20000,batasBayar:10,saldoAwal:0,saldoAwalTgl:'',tahunMulai:curY(),kategori:['Kebersihan & kerja bakti','Keamanan & ronda','Sosial & santunan','Perayaan & kegiatan warga','Perbaikan fasilitas','Konsumsi rapat','ATK & administrasi','Lain-lain'],kategoriMasuk:['Sumbangan warga','Donasi','Sewa aset RT','Lain-lain'],kelompok:['Kelompok 1','Kelompok 2','Kelompok 3'],sesi:['22:00–01:00','01:00–04:00'],menuTutup:[],pinSuper:'123456'}}
 function kosong(){return{v:1,settings:defSettings(),warga:[],aset:[],payments:[],kas:[],dokumen:[],anggota:[],jadwal:[]}}
 const cmpJ=(a,b,D)=>{D=D||db;const sx=D.settings.sesi;return a.tanggal.localeCompare(b.tanggal)||(sx.indexOf(a.sesi)-sx.indexOf(b.sesi))||String(a.pos).localeCompare(String(b.pos))};
 function genJadwal(D,mulai,minggu){
@@ -391,7 +397,7 @@ act.simpanForm=()=>{
 act.formHapus=()=>{const o=curForm.o;konfirm(o.hapusMsg||'Hapus data ini?',()=>{o.onHapus();closeModal();simpan();render();toast('Terhapus')})};
 act.hapusFile=d=>{curForm.fs[d.n]=null;curForm.draw()};
 act.tab=d=>{ui.tab[d.k]=d.v;render()};
-act.nav=d=>{ui.page=d.p;render();window.scrollTo(0,0)};
+act.nav=d=>{if(!menuOk(d.p))return toast(PAGES[d.p]&&PAGES[d.p].su?'Menu Pengaturan hanya untuk super user.':'Menu ini dikunci super user untuk admin.','err');ui.page=d.p;render();window.scrollTo(0,0)};
 act.hapus=d=>{konfirm(`Hapus ${d.label}?`,()=>{
   if(d.col==='warga'){db.payments=db.payments.filter(p=>p.wargaId!==d.id);db.anggota.forEach(a=>{if(a.wargaId===d.id)a.wargaId=''})}
   if(d.col==='anggota'){db.jadwal.forEach(j=>{j.petugas=j.petugas.filter(p=>p!==d.id);if(j.koordinator===d.id)j.koordinator='';delete j.absen[d.id]})}
@@ -486,17 +492,19 @@ act.keluar=()=>{session=null;sset(SKEY,'null');ui.login={mode:null,err:''};rende
 
 /* ================= kerangka ================= */
 const PAGES={beranda:{l:'Beranda',fn:pBeranda},warga:{l:'Warga',fn:pWarga},iuran:{l:'Iuran',fn:pIuran},kas:{l:'Buku kas',fn:pKas},laporan:{l:'Laporan',fn:pLaporan},aset:{l:'Aset RT',fn:pAset},dokumen:{l:'Dokumen',fn:pDokumen},ronda:{l:'Ronda',fn:pRonda},setting:{l:'Pengaturan',fn:pSetting,su:true}};
+const MENU_ADMIN=[['warga','Warga'],['iuran','Iuran'],['kas','Buku kas'],['laporan','Laporan'],['aset','Aset RT'],['dokumen','Dokumen'],['ronda','Ronda']];
+const menuOk=k=>{const p=PAGES[k];if(!p||!session)return false;if(isSuper())return true;if(p.su)return false;if(session.role==='admin')return !(db.settings.menuTutup||[]).includes(k);return true};
 function navHTML(){
   const s=db.settings,n=berikutnya(),role=session.role==='super'?'Super user':session.role==='admin'?'Admin: '+((db.warga.find(w=>w.id===session.id)||{}).nama||''):'Warga (lihat saja)';
   return `<nav class="nav" aria-label="Menu utama"><div class="label"><div class="l1">BUKU KAS</div><div class="l2">${namaLing()}</div><div class="l3">${esc(s.nama||s.kelurahan||'')}</div></div>
-  ${Object.entries(PAGES).filter(([k,p])=>!p.su||isSuper()).map(([k,p])=>`<a role="button" tabindex="0" class="${ui.page===k?'on':''}" data-act="nav" data-p="${k}">${p.l}</a>`).join('')}
+  ${Object.entries(PAGES).map(([k,p])=>{const ok=menuOk(k);return `<a role="button" tabindex="0" class="${ui.page===k?'on':''}${ok?'':' kunci'}"${ok?'':' aria-disabled="true"'} data-act="nav" data-p="${k}">${p.l}${ok?'':' <span aria-label="terkunci">🔒</span>'}</a>`}).join('')}
   <div class="gap"></div>${n?`<div class="nxt">Ronda: ${esc(tglHari(n.tanggal))}<br>${hariTxt(n.hari)}</div>`:''}
   <div class="usr">${esc(role)}<br><span class="syn ${sync.state} synT">${synLabel()}</span><br><button data-act="keluar">Keluar</button></div></nav>`;
 }
 function render(){
   const app=$('#app'),y=window.scrollY;
   if(!session){app.innerHTML=loginView();return}
-  if(PAGES[ui.page].su&&!isSuper())ui.page='beranda';
+  if(!menuOk(ui.page))ui.page='beranda';
   Object.keys(TBL).forEach(k=>delete TBL[k]);
   app.innerHTML=`<div class="shell">${navHTML()}<main>${persist?'':'<div class="notice">Mode pratinjau: data tidak tersimpan permanen. Simpan file ini ke perangkat lalu buka lewat browser agar data tersimpan, atau unduh cadangan di menu Pengaturan.</div>'}${PAGES[ui.page].fn()}</main></div>`;
   window.scrollTo(0,y);
@@ -516,11 +524,11 @@ function pBeranda(){
   const last=ledger().slice(-6).reverse();
   return ph(namaLing(),`${esc([s.nama,s.kelurahan,s.kecamatan,s.kota].filter(Boolean).join(', '))}${s.periode?`<br>Periode kepengurusan ${esc(s.periode)}`:''}`,'')+banner()+
   `<div class="cols"><section class="lembar"><h3>Kas ${BULAN[M-1]} ${Y}</h3>${T(['Uraian',{t:'Jumlah',c:'r'}],[['Saldo awal bulan',R(L.awal)],['Kas masuk',R(L.masuk)],['Kas keluar',R(-L.keluar)]],{foot:['Saldo kas saat ini',R(saldoTotal())]})}<p><small>Iuran ${BULAN[M-1]}: ${sudah} dari ${aktif.length} warga sudah membayar.</small></p></section>
-  <section class="lembar"><h3>Tunggakan iuran</h3><p style="margin:0 0 6px"><b>${tg.length} warga</b> menunggak, total <b>${rp(totTg)}</b>.</p>${tg.length?T(['Warga',{t:'Bulan',c:'r'},{t:'Nominal',c:'r'}],tg.slice(0,5).map(r=>[`No. ${esc(r.w.rumah)} ${esc(r.w.nama)}`,{t:r.list.length,c:'r'},R(r.total)])):'<p>Tidak ada tunggakan.</p>'}${btn('nav','Lihat rekap tunggakan','data-p="iuran"','kecil')}</section></div>
+  <section class="lembar"><h3>Tunggakan iuran</h3><p style="margin:0 0 6px"><b>${tg.length} warga</b> menunggak, total <b>${rp(totTg)}</b>.</p>${tg.length?T(['Warga',{t:'Bulan',c:'r'},{t:'Nominal',c:'r'}],tg.slice(0,5).map(r=>[`No. ${esc(r.w.rumah)} ${esc(r.w.nama)}`,{t:r.list.length,c:'r'},R(r.total)])):'<p>Tidak ada tunggakan.</p>'}${menuOk('iuran')?btn('nav','Lihat rekap tunggakan','data-p="iuran"','kecil'):''}</section></div>
   <section class="lembar"><h3>Transaksi terakhir</h3>${T(['Tanggal','Uraian',{t:'Masuk',c:'r'},{t:'Keluar',c:'r'}],last.map(r=>[tgl(r.tanggal),esc(r.uraian),r.jenis==='masuk'?R(r.jumlah):{t:'',c:'r'},r.jenis==='keluar'?R(r.jumlah):{t:'',c:'r'}]))}</section>
-  ${can()?`<div class="acts">${btn('bayarBaru','Catat pembayaran iuran','','utama')}${btn('kasMasuk','Kas masuk')}${btn('kasKeluar','Kas keluar')}${btn('absenPilih','Catat kehadiran ronda')}</div>`:''}`;
+  ${can()?`<div class="acts">${menuOk('iuran')?btn('bayarBaru','Catat pembayaran iuran','','utama'):''}${menuOk('kas')?btn('kasMasuk','Kas masuk')+btn('kasKeluar','Kas keluar'):''}${menuOk('ronda')?btn('absenPilih','Catat kehadiran ronda'):''}</div>`:''}`;
 }
-act.absenPilih=()=>{ui.page='ronda';ui.tab.ronda='kehadiran';render()};
+act.absenPilih=()=>{if(!menuOk('ronda'))return;ui.page='ronda';ui.tab.ronda='kehadiran';render()};
 
 /* ================= warga ================= */
 function wargaRows(){return db.warga.filter(w=>match('warga',w.nama,w.rumah,w.hp,w.status)).sort(byRumah)}
@@ -760,6 +768,7 @@ function pSetting(){
   <section class="lembar"><h3>Pengurus</h3><div class="grid">${F('ketua','Ketua RT')}${F('wakil','Wakil ketua RT')}${F('bendahara','Bendahara')}${F('sekretaris','Sekretaris')}${F('ketuaRW','Ketua RW (tanda tangan "mengetahui")')}${F('periode','Periode kepengurusan (mis. 2025 – 2028)')}${F('koordinator','Koordinator ronda')}${F('koordinatorHp','HP koordinator ronda','tel')}</div></section>
   <section class="lembar"><h3>Keuangan</h3><div class="grid">${F('iuran','Iuran standar per bulan (Rp)','number','min="0"')}${F('batasBayar','Batas bayar tiap tanggal','number','min="1" max="28"')}${F('denda','Denda izin / tidak hadir ronda (Rp)','number','min="0"')}${F('saldoAwal','Saldo awal kas (Rp)','number')}${F('saldoAwalTgl','Tanggal saldo awal','date')}${F('tahunMulai','Pencatatan iuran mulai tahun','number')}${TA('kategori','Kategori pengeluaran kegiatan',s.kategori,'Satu kategori per baris.')}${TA('kategoriMasuk','Kategori penerimaan lain',s.kategoriMasuk,'Iuran bulanan dan denda ronda otomatis punya kategori sendiri.')}</div></section>
   <section class="lembar"><h3>Ronda</h3><div class="grid">${TA('kelompok','Nama kelompok ronda',s.kelompok,'Satu kelompok per baris. Mengubah nama pada baris yang sama ikut memperbarui anggota dan jadwal.')}${TA('sesi','Sesi jaga setiap Sabtu malam',s.sesi,'Satu sesi per baris, mis. 22:00–01:00. Dipakai untuk mencegah penugasan ganda.')}</div></section>
+  <section class="lembar"><h3>Akses menu untuk admin</h3><p>Centang menu yang boleh dibuka admin. Menu yang tidak dicentang tetap terlihat oleh admin, tetapi terkunci (tanda gembok). Beranda selalu terbuka. Pengaturan hanya untuk super user dan tampak terkunci bagi admin dan warga. Warga bisa membuka semua menu lain untuk melihat data.</p><div class="mcg">${MENU_ADMIN.map(([k,l])=>`<label class="chk"><input type="checkbox" data-menu="${k}"${(s.menuTutup||[]).includes(k)?'':' checked'}><span>${l}</span></label>`).join('')}</div><p><small>Berlaku setelah klik Simpan pengaturan, dan ikut tersinkron ke semua HP.</small></p></section>
   <section class="lembar"><h3>Keamanan & admin</h3><div class="grid">${F('pinSuper','PIN super user','password','autocomplete="new-password"')}</div><h3 style="margin:16px 0 6px">Admin terpilih</h3>${T(['Nama','No. rumah',{t:'',c:'aksi'}],admins.map(w=>[esc(w.nama),esc(w.rumah),{c:'aksi',t:btn('adminPin','Ganti PIN',`data-id="${w.id}"`,'kecil')+btn('adminCabut','Cabut akses',`data-id="${w.id}"`,'kecil bahaya')}]),{empty:'Belum ada admin.'})}<p>${btn('adminBaru','Tunjuk admin baru')}</p><p><small>PIN hanya pengaman tampilan di perangkat ini, bukan sistem keamanan server.</small></p></section>
   ${syncSection()}
   <section class="lembar"><h3>Data</h3><p>Data tersimpan di browser perangkat ini. Unduh cadangan secara berkala, dan gunakan cadangan untuk memindahkan data ke perangkat lain.</p><div class="acts">${btn('cadangan','Unduh cadangan (.json)')}<label class="btn" style="cursor:pointer">Pulihkan dari cadangan<input id="pulihFile" type="file" accept="application/json,.json" hidden></label>${btn('contoh','Muat data contoh')}${btn('kosongkan','Kosongkan semua data','','bahaya')}</div></section>`;
@@ -767,6 +776,7 @@ function pSetting(){
 act.simpanSetting=()=>{
   const s=db.settings,old={...s,kelompok:[...s.kelompok]},n={};
   document.querySelectorAll('[data-st]').forEach(el=>{const k=el.dataset.st;n[k]=el.dataset.list?el.value.split('\n').map(x=>x.trim()).filter(Boolean):(el.type==='number'?num(el.value):el.value)});
+  n.menuTutup=[...document.querySelectorAll('[data-menu]')].filter(c=>!c.checked).map(c=>c.dataset.menu);
   if(String(n.pinSuper).length<4)return toast('PIN super user minimal 4 karakter.','err');
   if(!n.kelompok.length||!n.sesi.length)return toast('Kelompok dan sesi ronda tidak boleh kosong.','err');
   old.kelompok.forEach((k,i)=>{const nk=n.kelompok[i];if(nk&&nk!==k){db.anggota.forEach(a=>{if(a.kelompok===k)a.kelompok=nk});db.jadwal.forEach(j=>{if(j.kelompok===k)j.kelompok=nk})}else if(!nk){db.anggota.forEach(a=>{if(a.kelompok===k)a.kelompok=''})}});
@@ -782,7 +792,7 @@ act.contoh=()=>konfirm('Ganti semua data dengan data contoh?',()=>{db=contoh();s
 act.kosongkan=()=>konfirm('Hapus SEMUA data (warga, kas, ronda, file)? Pengaturan identitas ikut kembali ke awal. Unduh cadangan dulu jika perlu.',()=>{db=kosong();simpan();render();toast('Semua data dikosongkan')},'Kosongkan');
 
 /* ================= sinkronisasi antar HP (Firebase Realtime Database) ================= */
-const LIST_KEYS=['kategori','kategoriMasuk','kelompok','sesi'];
+const LIST_KEYS=['kategori','kategoriMasuk','kelompok','sesi','menuTutup'];
 const COLS=['warga','aset','payments','kas','dokumen','anggota','jadwal'];
 const RULES='{\n  "rules": {\n    ".read": false,\n    ".write": false,\n    "sikas": {\n      "$kode": { ".read": true, ".write": true }\n    }\n  }\n}';
 const arr=x=>Array.isArray(x)?x.filter(v=>v!=null):(x&&typeof x==='object'?Object.values(x):[]);
