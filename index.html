@@ -339,7 +339,7 @@ function fieldHTML(f,fs){
     case 'select':return `<label class="fld${cls}"><span>${f.label}${req}</span><select data-f="${f.name}"${rf}>${f.options.map(op=>{const o=typeof op==='object'?op:{v:op,t:op};return `<option value="${esc(o.v)}"${String(o.v)===String(v)?' selected':''}>${esc(o.t)}</option>`}).join('')}</select></label>`;
     case 'textarea':return `<label class="fld${cls}"><span>${f.label}${req}</span><textarea rows="3" data-f="${f.name}">${esc(v)}</textarea></label>`;
     case 'checkbox':return `<label class="chk full"><input type="checkbox" data-f="${f.name}"${v?' checked':''}${rf}><span>${f.label}</span></label>`;
-    case 'multicheck':return `<fieldset class="fld full"><legend>${f.label}${req}</legend><div class="mcg">${f.options.map(o=>`<label class="chk${o.disabled?' off':''}"><input type="checkbox" data-mc="${f.name}" value="${esc(o.v)}"${(v||[]).map(String).includes(String(o.v))?' checked':''}${o.disabled?' disabled':''}><span>${esc(o.t)}${o.note?`<small>${esc(o.note)}</small>`:''}</span></label>`).join('')||'<small>Belum ada pilihan.</small>'}</div></fieldset>`;
+    case 'multicheck':return `<fieldset class="fld full"><legend>${f.label}${req}</legend><div class="mcg">${f.options.map(o=>`<label class="chk${o.disabled?' off':''}"><input type="checkbox" data-mc="${f.name}"${f.refresh?' data-refresh="1"':''} value="${esc(o.v)}"${(v||[]).map(String).includes(String(o.v))?' checked':''}${o.disabled?' disabled':''}><span>${esc(o.t)}${o.note?`<small>${esc(o.note)}</small>`:''}</span></label>`).join('')||'<small>Belum ada pilihan.</small>'}</div></fieldset>`;
     case 'file':return `<div class="fld full"><span>${f.label}</span><input type="file" data-fi="${f.name}" data-max="${f.max||1000}" accept="${f.accept||'image/*,application/pdf'}"><div class="fpv">${v?fileThumb(v)+` <button type="button" class="btn kecil" data-act="hapusFile" data-n="${f.name}">Hapus file</button>`:'<small>Belum ada file</small>'}</div></div>`;
     case 'absenrow':{const st=fs['st_'+f.id]||'';const den=db.settings.denda;
       return `<div class="arow"><b>${esc(f.nama)}</b><select data-f="st_${f.id}" data-refresh="1" aria-label="Status ${esc(f.nama)}"><option value="">Belum dicatat</option><option value="hadir"${st==='hadir'?' selected':''}>Hadir</option><option value="izin"${st==='izin'?' selected':''}>Izin</option><option value="tidak"${st==='tidak'?' selected':''}>Tidak hadir</option></select><div class="opt">${(st==='izin'||st==='tidak')?`<label class="chk"><input type="checkbox" data-f="lp_${f.id}"${fs['lp_'+f.id]?' checked':''}><span>Sudah lapor koordinator</span></label><label class="chk"><input type="checkbox" data-f="ln_${f.id}"${fs['ln_'+f.id]?' checked':''}><span>Denda ${rp(den)} lunas</span></label>`:'<small>—</small>'}</div></div>`}
@@ -364,7 +364,7 @@ function ferr(msg){const e=$('#ferr');if(e){e.textContent=msg;e.scrollIntoView({
 $('#modal').addEventListener('input',e=>{if(!curForm)return;const t=e.target,n=t.dataset.f;if(!n||t.tagName==='SELECT'||t.type==='checkbox')return;curForm.fs[n]=t.value});
 $('#modal').addEventListener('change',async e=>{
   if(!curForm)return;const t=e.target,fs=curForm.fs,o=curForm.o;
-  if(t.dataset.mc){const n=t.dataset.mc,set=new Set((fs[n]||[]).map(String));t.checked?set.add(t.value):set.delete(t.value);fs[n]=[...set];return}
+  if(t.dataset.mc){const n=t.dataset.mc,set=new Set((fs[n]||[]).map(String));t.checked?set.add(t.value):set.delete(t.value);fs[n]=[...set];if(t.dataset.refresh)curForm.draw();return}
   if(t.dataset.fi){const f=t.files[0];if(!f)return;try{fs[t.dataset.fi]=await bacaFile(f,+t.dataset.max||1000);curForm.draw()}catch(err){toast(err.message,'err')}return}
   const n=t.dataset.f;if(!n)return;fs[n]=t.type==='checkbox'?t.checked:t.value;
   if(t.dataset.refresh){if(o.onChange)o.onChange(n,fs);curForm.draw()}
@@ -422,7 +422,7 @@ function tunggakanData(fy){
 function ringkasBulan(list){const g={};list.forEach(x=>{(g[x.y]=g[x.y]||[]).push(BLN[x.m-1])});return Object.entries(g).map(([y,a])=>a.join(', ')+' '+y).join('; ')}
 function ledger(){
   const rows=[],s=db.settings;
-  db.payments.forEach(p=>{const w=db.warga.find(x=>x.id===p.wargaId);rows.push({tanggal:p.tanggal,jenis:'masuk',kategori:'Iuran bulanan',uraian:`Iuran ${w?w.nama+' (No. '+w.rumah+')':'warga'} – ${BULAN[p.bulan-1]} ${p.tahun}`,jumlah:+p.jumlah,auto:true,col:'payments',id:p.id,bukti:p.bukti})});
+  db.payments.forEach(p=>{const w=db.warga.find(x=>x.id===p.wargaId);rows.push({tanggal:p.tanggal,jenis:'masuk',kategori:'Iuran bulanan',uraian:`${p.tg?'Bayar tunggakan iuran':'Iuran'} ${w?w.nama+' (No. '+w.rumah+')':'warga'} – ${BULAN[p.bulan-1]} ${p.tahun}${p.tg?' (bayar tunggakan)':''}`,jumlah:+p.jumlah,auto:true,col:'payments',id:p.id,bukti:p.bukti})});
   db.jadwal.forEach(j=>Object.entries(j.absen||{}).forEach(([aid,r])=>{if((r.status==='izin'||r.status==='tidak')&&r.lunas)rows.push({tanggal:r.tglLunas||j.tanggal,jenis:'masuk',kategori:'Denda ronda',uraian:`Denda ronda ${namaAg(aid)} (${r.status==='izin'?'izin':'tidak hadir'}) – ${tgl(j.tanggal)}`,jumlah:+(r.denda||s.denda),auto:true,col:'jadwal',id:j.id,bukti:null})}));
   db.kas.forEach(k=>rows.push({tanggal:k.tanggal,jenis:k.jenis,kategori:k.kategori,uraian:k.uraian,jumlah:+k.jumlah,auto:false,col:'kas',id:k.id,bukti:k.bukti}));
   rows.sort((a,b)=>a.tanggal.localeCompare(b.tanggal)||(a.jenis===b.jenis?0:a.jenis==='masuk'?-1:1));
@@ -583,7 +583,7 @@ function tabBayar(){
 function tabTunggak(){
   const Y=+ui.f.ty;
   const rows=tunggakanData(Y);const total=sum(rows,r=>r.total);
-  return `<section class="lembar"><div class="bar">${selF('ty',optTahun(true),'Tahun')}<span class="sp"></span>${expBtns('#tbl-tunggak','Rekap tunggakan iuran','Per '+tgl(today())+(Y?' • tahun '+Y:' • semua tahun'))}</div><div id="tbl-tunggak">${T(['Warga','No. rumah',{t:'Jumlah bulan',c:'r'},'Bulan yang belum dibayar',{t:'Tunggakan',c:'r'}],rows.map(r=>[esc(r.w.nama),esc(r.w.rumah),{t:r.list.length,c:'r'},esc(ringkasBulan(r.list)),R(r.total)]),{empty:'Tidak ada tunggakan. Semua warga lunas.',foot:[`${rows.length} warga`,'',{t:sum(rows,r=>r.list.length),c:'r'},'',R(total)]})}</div></section>`;
+  return `<section class="lembar"><div class="bar">${selF('ty',optTahun(true),'Tahun')}<span class="sp"></span>${expBtns('#tbl-tunggak','Rekap tunggakan iuran','Per '+tgl(today())+(Y?' • tahun '+Y:' • semua tahun'))}</div><div id="tbl-tunggak">${T(['Warga','No. rumah',{t:'Jumlah bulan',c:'r'},'Bulan yang belum dibayar',{t:'Tunggakan',c:'r'},{t:'',c:'aksi'}],rows.map(r=>[esc(r.w.nama),esc(r.w.rumah),{t:r.list.length,c:'r'},esc(ringkasBulan(r.list)),R(r.total),{c:'aksi',t:can()?btn('bayarTunggak','Bayar tunggakan',`data-id="${r.w.id}"`,'kecil utama'):''}]),{empty:'Tidak ada tunggakan. Semua warga lunas.',foot:[`${rows.length} warga`,'',{t:sum(rows,r=>r.list.length),c:'r'},'',R(total),'']})}</div></section>`;
 }
 function formBayar(wid,y,m){
   openForm({title:'Catat pembayaran iuran',init:{wargaId:wid||'',tahun:y||curY(),bulan:m?[String(m)]:[],tanggal:today(),jumlah:'',metode:'Tunai',bukti:null,ket:''},
@@ -606,6 +606,22 @@ function formBayarUbah(id){const p=db.payments.find(x=>x.id===id);if(!p)return;
       {name:'tanggal',label:'Tanggal bayar',type:'date',req:true},{name:'jumlah',label:'Jumlah (Rp)',type:'number',req:true,min:0},{name:'metode',label:'Metode',type:'select',options:unique(['Tunai','Transfer','QRIS','Lainnya',p.metode])},{name:'bukti',label:'Bukti',type:'file'},{name:'ket',label:'Keterangan',type:'text',full:true}],
     validate:fs=>db.payments.some(x=>x.id!==id&&x.wargaId===fs.wargaId&&x.tahun===+fs.tahun&&x.bulan===+fs.bulan)?'Pembayaran warga ini untuk bulan dan tahun tersebut sudah ada.':null,
     onSave:fs=>{Object.assign(p,{wargaId:fs.wargaId,bulan:+fs.bulan,tahun:+fs.tahun,tanggal:fs.tanggal,jumlah:num(fs.jumlah),metode:fs.metode,bukti:fs.bukti,ket:fs.ket});toast('Pembayaran diperbarui')}});}
+function formBayarTunggakan(wid){
+  const w=db.warga.find(x=>x.id===wid);if(!w||tanpaIuran(w))return toast('Rumah ini tidak ditarik iuran.');
+  const paid=new Set(db.payments.filter(p=>p.wargaId===wid).map(p=>p.tahun+'-'+p.bulan));
+  const due=jatuhTempo(w).filter(x=>!paid.has(x.y+'-'+x.m));
+  if(!due.length)return toast('Warga ini tidak punya tunggakan.');
+  openForm({title:'Bayar tunggakan iuran',init:{pilih:due.map(x=>x.y+'-'+x.m),tanggal:today(),jumlah:'',metode:'Tunai',bukti:null,ket:''},
+    fields:fs=>{const per=num(fs.jumlah)||nominal(w),n=fs.pilih.length;
+      return[{type:'info',html:`<b>${esc(w.nama)}</b> (No. ${esc(w.rumah)})<br>Dipilih ${n} bulan × ${rp(per)} = <b>${rp(n*per)}</b>. Jumlah ini otomatis masuk pemasukan kas dan tunggakannya hilang.`},
+        {name:'pilih',label:'Bulan tunggakan yang dibayar',type:'multicheck',req:true,refresh:true,options:due.map(x=>({v:x.y+'-'+x.m,t:BULAN[x.m-1]+' '+x.y}))},
+        {name:'jumlah',label:'Jumlah per bulan (Rp)',type:'number',min:0,ph:String(nominal(w)),refresh:true},{name:'tanggal',label:'Tanggal bayar',type:'date',req:true},
+        {name:'metode',label:'Metode',type:'select',options:['Tunai','Transfer','QRIS','Lainnya']},{name:'bukti',label:'Bukti transfer / kwitansi',type:'file'},{name:'ket',label:'Keterangan',type:'text',full:true}]},
+    onSave:fs=>{const per=num(fs.jumlah)||nominal(w);let n=0;
+      fs.pilih.forEach(k=>{const[y,m]=k.split('-').map(Number);if(!db.payments.some(p=>p.wargaId===wid&&p.tahun===y&&p.bulan===m)){db.payments.push({id:uid(),wargaId:wid,tahun:y,bulan:m,jumlah:per,tanggal:fs.tanggal,metode:fs.metode,bukti:fs.bukti,ket:fs.ket,tg:1});n++}});
+      toast(n+' bulan lunas, '+rp(n*per)+' masuk kas')}});
+}
+act.bayarTunggak=d=>formBayarTunggakan(d.id);
 act.bayarBaru=()=>formBayar();act.bayarCell=d=>formBayar(d.w,+ui.f.iy,+d.m);act.bayarUbah=d=>formBayarUbah(d.id);
 
 /* ================= buku kas ================= */
