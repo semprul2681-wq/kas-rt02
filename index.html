@@ -532,7 +532,7 @@ function pBeranda(){
   `<div class="cols"><section class="lembar"><h3>Kas ${BULAN[M-1]} ${Y}</h3>${T(['Uraian',{t:'Jumlah',c:'r'}],[['Saldo awal bulan',R(L.awal)],['Kas masuk',R(L.masuk)],['Kas keluar',R(-L.keluar)]],{foot:['Saldo kas saat ini',R(saldoTotal())]})}<p><small>Iuran ${BULAN[M-1]}: ${sudah} dari ${aktif.length} warga sudah membayar.</small></p></section>
   <section class="lembar"><h3>Tunggakan iuran</h3><p style="margin:0 0 6px"><b>${tg.length} warga</b> menunggak, total <b>${rp(totTg)}</b>.</p>${tg.length?T(['Warga',{t:'Bulan',c:'r'},{t:'Nominal',c:'r'}],tg.slice(0,5).map(r=>[`No. ${esc(r.w.rumah)} ${esc(r.w.nama)}`,{t:r.list.length,c:'r'},R(r.total)])):'<p>Tidak ada tunggakan.</p>'}${menuOk('iuran')?btn('nav','Lihat rekap tunggakan','data-p="iuran"','kecil'):''}</section></div>
   <section class="lembar"><h3>Transaksi terakhir</h3>${T(['Tanggal','Uraian',{t:'Masuk',c:'r'},{t:'Keluar',c:'r'}],last.map(r=>[tgl(r.tanggal),esc(r.uraian),r.jenis==='masuk'?R(r.jumlah):{t:'',c:'r'},r.jenis==='keluar'?R(r.jumlah):{t:'',c:'r'}]))}</section>
-  ${(session.role!=='viewer')?`<div class="acts">${canEdit('iuran')?btn('bayarBaru','Catat pembayaran iuran','','utama'):''}${canEdit('kas')?btn('kasMasuk','Kas masuk')+btn('kasKeluar','Kas keluar'):''}${canEdit('ronda')?btn('absenPilih','Catat kehadiran ronda'):''}</div>`:''}`;
+  ${(session.role!=='viewer')?`<div class="acts">${canEdit('iuran')?btn('bayarBaru','Catat pembayaran iuran','','utama'):''}${canEdit('kas')?btn('kasMasuk','Kas masuk')+btn('kasKeluar','Kas keluar'):''}${canEdit('ronda')?btn('absenPilih','Catat kehadiran ronda')+btn('jimpitanBaru','Catat jimpitan'):''}</div>`:''}`;
 }
 act.absenPilih=()=>{if(!canEdit('ronda'))return;ui.page='ronda';ui.tab.ronda='kehadiran';render()};
 
@@ -690,8 +690,8 @@ function jadwalFiltered(){const Y=+ui.f.ry,Mo=+ui.f.rb;return db.jadwal.filter(j
 function pRonda(){
   const t=curTab('ronda','mingguan'),s=db.settings;
   const aturan=`<div class="rules">Ronda setiap <b>Sabtu malam (malam Minggu)</b>. Izin atau tidak hadir <b>wajib memberi tahu koordinator ronda${s.koordinator?` (${esc(s.koordinator)}${s.koordinatorHp?', '+esc(s.koordinatorHp):''})`:''}</b> dan dikenai denda <b>${rp(s.denda)}</b>.</div>`;
-  const body={mingguan:tabMingguan,jadwal:tabJadwal,kehadiran:tabHadir,rekap:tabRekap,anggota:tabAnggota}[t]();
-  return ph('Ronda lingkungan','Jadwal piket, kehadiran, dan denda')+banner()+aturan+tabs('ronda',[['mingguan','Jadwal mingguan'],['jadwal','Kelola jadwal'],['kehadiran','Kehadiran'],['rekap','Rekap anggota'],['anggota','Anggota & kelompok']])+body;
+  const body={jimpitan:tabJimpitan,mingguan:tabMingguan,jadwal:tabJadwal,kehadiran:tabHadir,rekap:tabRekap,anggota:tabAnggota}[t]();
+  return ph('Ronda lingkungan','Jadwal piket, kehadiran, dan denda')+banner()+aturan+tabs('ronda',[['mingguan','Jadwal mingguan'],['jimpitan','Jimpitan'],['jadwal','Kelola jadwal'],['kehadiran','Kehadiran'],['rekap','Rekap anggota'],['anggota','Anggota & kelompok']])+body;
 }
 function jadwalSaya(){
   const opts=[{v:'',t:'— pilih nama —'},...db.anggota.slice().sort(byNama).map(a=>({v:a.id,t:a.nama}))];
@@ -704,8 +704,28 @@ function tabMingguan(){
   GEN.jadwalMendatang=()=>{const rows=db.jadwal.filter(j=>j.tanggal>=t&&j.tanggal<=addDays(t,60)).sort(cmpJ).map(j=>[tglHari(j.tanggal),esc(j.sesi),esc(j.pos),esc(j.kelompok),petugasTxt(j)]);return T(['Tanggal','Sesi','Pos','Kelompok','Petugas (K = koordinator)'],rows,{empty:'Belum ada jadwal.'})};
   return `<section class="lembar">${jadwalSaya()}<div class="bar">${btn('mingguGeser','← 4 minggu sebelumnya','data-n="-1"','kecil')}${btn('mingguGeser','Hari ini','data-n="0"','kecil')}${btn('mingguGeser','4 minggu berikutnya →','data-n="1"','kecil')}<span class="sp"></span>${expBtns('','Jadwal ronda 2 bulan ke depan',namaLing(),{gen:'jadwalMendatang',ttd:false})}</div>
   ${dates.map(d=>{const es=db.jadwal.filter(j=>j.tanggal===d).sort(cmpJ),h=diffDays(d,t);
-    return `<article class="sabtu${h>=0&&h<=3?' dekat':''}"><header><h3>${esc(tglHari(d))}</h3><span>${h<0?'sudah lewat':hariTxt(h)}</span></header><div class="isi">${es.length?T(['Sesi','Pos','Kelompok','Petugas (K = koordinator)'],es.map(j=>[esc(j.sesi),esc(j.pos),esc(j.kelompok),j.petugas.map(id=>esc(namaAg(id))+(id===j.koordinator?' (K)':'')+(j.absen[id]?' '+statChip(j.absen[id]):'')).join('<br>')||'–'])):`<p>Belum ada jadwal. ${can()?btn('jadwalBaru','Tambah jadwal','','kecil'):''}</p>`}</div></article>`}).join('')}</section>`;
+    return `<article class="sabtu${h>=0&&h<=3?' dekat':''}"><header><h3>${esc(tglHari(d))}</h3><span>${h<0?'sudah lewat':hariTxt(h)}${(()=>{const jm=sum(db.kas.filter(k=>isJimp(k)&&k.tanggal===d),k=>+k.jumlah);return jm?' • Jimpitan '+rp(jm):''})()} ${can()?btn('jimpitanBaru','Catat jimpitan',`data-t="${d}"`,'kecil'):''}</span></header><div class="isi">${es.length?T(['Sesi','Pos','Kelompok','Petugas (K = koordinator)'],es.map(j=>[esc(j.sesi),esc(j.pos),esc(j.kelompok),j.petugas.map(id=>esc(namaAg(id))+(id===j.koordinator?' (K)':'')+(j.absen[id]?' '+statChip(j.absen[id]):'')).join('<br>')||'–'])):`<p>Belum ada jadwal. ${can()?btn('jadwalBaru','Tambah jadwal','','kecil'):''}</p>`}</div></article>`}).join('')}</section>`;
 }
+
+/* ---- jimpitan / perelek ronda: otomatis masuk kas masuk ---- */
+const isJimp=k=>k.jenis==='masuk'&&(k.jimpitan||k.kategori==='Jimpitan ronda');
+function jimpRows(){const Y=+ui.f.ry,Mo=+ui.f.rb;return db.kas.filter(k=>isJimp(k)&&(!Y||+k.tanggal.slice(0,4)===Y)&&(!Mo||+k.tanggal.slice(5,7)===Mo)).sort((a,b)=>b.tanggal.localeCompare(a.tanggal))}
+function tabJimpitan(){
+  const rows=jimpRows(),per=(+ui.f.rb?BULAN[ui.f.rb-1]+' ':'')+(+ui.f.ry||'semua tahun');
+  return `<section class="lembar"><p>Uang jimpitan (perelek) yang terkumpul saat ronda. Setiap catatan otomatis masuk ke <b>kas masuk</b> dan menambah saldo kas.</p>${filterBar((can()?btn('jimpitanBaru','Catat jimpitan','','utama'):'')+expBtns('#tbl-jimp','Jimpitan ronda',per,{ttd:false}))}<div id="tbl-jimp">${T(['Tanggal ronda','Kelompok','Keterangan',{t:'Jumlah',c:'r'},{t:'',c:'aksi'}],rows.map(k=>[esc(tglHari(k.tanggal)),esc(k.kelompok||'–'),esc(k.ket||''),R(k.jumlah),aksiCell('kas',k.id,'catatan jimpitan','jimpitanUbah')]),{empty:'Belum ada catatan jimpitan pada periode ini.',foot:[`${rows.length} catatan`,'','',R(sum(rows,k=>+k.jumlah)),'']})}</div></section>`;
+}
+function kelompokTgl(t){const e=db.jadwal.filter(x=>x.tanggal===t).sort(cmpJ)[0];return e?e.kelompok:''}
+function formJimpitan(id,tanggal){
+  const k=id?db.kas.find(x=>x.id===id):null;
+  openForm({title:k?'Ubah jimpitan':'Catat jimpitan ronda',
+    init:k?{tanggal:k.tanggal,kelompok:k.kelompok||'',jumlah:k.jumlah,ket:k.ket||''}:{tanggal:tanggal||today(),kelompok:kelompokTgl(tanggal||today()),jumlah:'',ket:''},
+    fields:fs=>[{type:'info',html:'Uang jimpitan (perelek) otomatis masuk ke kas masuk dan menambah saldo kas.'},{name:'tanggal',label:'Tanggal ronda',type:'date',req:true,refresh:true},{name:'kelompok',label:'Kelompok yang bertugas',type:'select',options:[{v:'',t:'— tidak dicatat —'},...unique([...db.settings.kelompok,fs.kelompok])]},{name:'jumlah',label:'Jumlah terkumpul (Rp)',type:'number',req:true,min:1},{name:'ket',label:'Keterangan (opsional)',type:'text',full:true}],
+    onChange:(n,fs)=>{if(n==='tanggal'&&!k)fs.kelompok=kelompokTgl(fs.tanggal)},
+    validate:fs=>num(fs.jumlah)>0?null:'Jumlah harus lebih dari 0.',
+    onSave:fs=>{const o={tanggal:fs.tanggal,jenis:'masuk',kategori:'Jimpitan ronda',uraian:'Jimpitan ronda '+tglHari(fs.tanggal)+(fs.kelompok?' – '+fs.kelompok:''),jumlah:num(fs.jumlah),jimpitan:true,kelompok:fs.kelompok,ket:fs.ket};
+      if(k)Object.assign(k,o);else db.kas.push({id:uid(),...o});toast('Jimpitan '+rp(num(fs.jumlah))+' masuk kas')}});
+}
+act.jimpitanBaru=d=>formJimpitan(null,d&&d.t);act.jimpitanUbah=d=>formJimpitan(d.id);
 act.mingguGeser=d=>{ui.minggu=+d.n===0?0:ui.minggu+ +d.n;render()};
 function filterBar(extra){return `<div class="bar">${selF('ry',optTahun(true),'Tahun')}${selF('rb',optBulan(true),'Bulan')}<span class="sp"></span>${extra||''}</div>`}
 function tabJadwal(){
