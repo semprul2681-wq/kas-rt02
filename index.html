@@ -318,6 +318,7 @@ const optTahun=all=>[...(all?[{v:0,t:'Semua tahun'}]:[]),...tahunList().map(y=>(
 const optBulan=all=>[...(all?[{v:0,t:'Semua bulan'}]:[]),...BULAN.map((b,i)=>({v:i+1,t:b}))];
 const buktiBtn=(col,id,fld,f)=>f?`<button class="btn kecil" data-act="lihat" data-col="${col}" data-id="${id}" data-fld="${fld}">Lihat</button>`:'';
 const namaLing=()=>`RT ${db.settings.rt} / RW ${db.settings.rw}`;
+const tanpaIuran=w=>!!w&&(!!w.bebas||w.status==='Kosong');
 const nominal=w=>+w.iuran||+db.settings.iuran||0;
 const AG=id=>db.anggota.find(a=>a.id===id);
 const namaAg=id=>AG(id)?AG(id).nama:'(sudah dihapus)';
@@ -416,7 +417,7 @@ function jatuhTempo(w){
 }
 function tunggakanData(fy){
   const paid=new Set(db.payments.map(p=>`${p.wargaId}|${p.tahun}|${p.bulan}`));
-  return db.warga.filter(w=>!w.bebas).sort(byRumah).map(w=>{const list=jatuhTempo(w).filter(x=>(!fy||x.y===fy)&&!paid.has(`${w.id}|${x.y}|${x.m}`));return{w,list,total:list.length*nominal(w)}}).filter(r=>r.list.length);
+  return db.warga.filter(w=>!tanpaIuran(w)).sort(byRumah).map(w=>{const list=jatuhTempo(w).filter(x=>(!fy||x.y===fy)&&!paid.has(`${w.id}|${x.y}|${x.m}`));return{w,list,total:list.length*nominal(w)}}).filter(r=>r.list.length);
 }
 function ringkasBulan(list){const g={};list.forEach(x=>{(g[x.y]=g[x.y]||[]).push(BLN[x.m-1])});return Object.entries(g).map(([y,a])=>a.join(', ')+' '+y).join('; ')}
 function ledger(){
@@ -525,7 +526,7 @@ function banner(){
 }
 function pBeranda(){
   const s=db.settings,Y=curY(),M=curM(),L=hitungLap(Y,M),tg=tunggakanData(0),totTg=sum(tg,r=>r.total);
-  const aktif=db.warga.filter(w=>!w.bebas),paidM=new Set(db.payments.filter(p=>p.tahun===Y&&p.bulan===M).map(p=>p.wargaId)),sudah=aktif.filter(w=>paidM.has(w.id)).length;
+  const aktif=db.warga.filter(w=>!tanpaIuran(w)),paidM=new Set(db.payments.filter(p=>p.tahun===Y&&p.bulan===M).map(p=>p.wargaId)),sudah=aktif.filter(w=>paidM.has(w.id)).length;
   const last=ledger().slice(-6).reverse();
   return ph(namaLing(),`${esc([s.nama,s.kelurahan,s.kecamatan,s.kota].filter(Boolean).join(', '))}${s.periode?`<br>Periode kepengurusan ${esc(s.periode)}`:''}`,'')+banner()+
   `<div class="cols"><section class="lembar"><h3>Kas ${BULAN[M-1]} ${Y}</h3>${T(['Uraian',{t:'Jumlah',c:'r'}],[['Saldo awal bulan',R(L.awal)],['Kas masuk',R(L.masuk)],['Kas keluar',R(-L.keluar)]],{foot:['Saldo kas saat ini',R(saldoTotal())]})}<p><small>Iuran ${BULAN[M-1]}: ${sudah} dari ${aktif.length} warga sudah membayar.</small></p></section>
@@ -537,23 +538,23 @@ act.absenPilih=()=>{if(!canEdit('ronda'))return;ui.page='ronda';ui.tab.ronda='ke
 
 /* ================= warga ================= */
 function wargaRows(){return db.warga.filter(w=>match('warga',w.nama,w.rumah,w.hp,w.status)).sort(byRumah)}
-function tblWarga(){const rows=wargaRows().map(w=>[{t:w.foto?`<img class="av" src="${w.foto.data}" alt="">`:`<span class="av">${esc((w.nama||'?').trim()[0]||'?').toUpperCase()}</span>`,c:'noprint'},`<b>${esc(w.nama)}</b>${w.catatan?`<br><small>${esc(w.catatan)}</small>`:''}`,esc(w.rumah),esc(w.hp),esc(w.status),w.bebas?'Bebas iuran':R(nominal(w)),w.admin?'<span class="chip a">Admin</span>':'',aksiCell('warga',w.id,w.nama,'wargaUbah',btn('wargaDetail','Detail',`data-id="${w.id}"`,'kecil'))]);
+function tblWarga(){const rows=wargaRows().map(w=>[{t:w.foto?`<img class="av" src="${w.foto.data}" alt="">`:`<span class="av">${esc((w.nama||'?').trim()[0]||'?').toUpperCase()}</span>`,c:'noprint'},`<b>${esc(w.nama)}</b>${w.catatan?`<br><small>${esc(w.catatan)}</small>`:''}`,esc(w.rumah),esc(w.hp),esc(w.status),w.status==='Kosong'?'Rumah kosong':w.bebas?'Bebas iuran':R(nominal(w)),w.admin?'<span class="chip a">Admin</span>':'',aksiCell('warga',w.id,w.nama,'wargaUbah',btn('wargaDetail','Detail',`data-id="${w.id}"`,'kecil'))]);
   return T([{t:'',c:'noprint'},'Nama','No. rumah','HP','Status',{t:'Iuran/bulan',c:'r'},'Akses',{t:'',c:'aksi'}],rows,{empty:'Belum ada data warga.'})}
 function pWarga(){return ph('Data warga',`${db.warga.length} warga terdaftar`,can()?btn('wargaBaru','Tambah warga','','utama'):'')+`<section class="lembar"><div class="bar">${cari('warga','Nama, No. rumah, HP…')}<span class="sp"></span>${expBtns('#tbl-warga','Daftar warga',`${namaLing()}`)}</div>${tblBox('warga',tblWarga)}</section>`}
 function formWarga(id){
   const w=id?db.warga.find(x=>x.id===id):null;
   openForm({title:w?'Ubah data warga':'Tambah warga',init:w?{...w,hak:w.admin?hakList(w):[]}:{nama:'',rumah:'',hp:'',status:'Tetap',bebas:false,mulai:'',iuran:'',admin:false,pin:'',hak:[],foto:null,catatan:''},
-    fields:fs=>[{name:'nama',label:'Nama lengkap',type:'text',req:true,full:true},{name:'rumah',label:'No. rumah',type:'text',req:true},{name:'hp',label:'No. HP',type:'tel'},{name:'status',label:'Status hunian',type:'select',options:['Tetap','Kontrak','Kost','Lainnya']},{name:'mulai',label:'Mulai iuran (bulan)',type:'month'},{name:'iuran',label:'Iuran khusus per bulan (kosong = standar)',type:'number',min:0},{name:'bebas',label:'Bebas iuran (tidak masuk tunggakan)',type:'checkbox'},
+    fields:fs=>[{name:'nama',label:'Nama lengkap',type:'text',req:true,full:true},{name:'rumah',label:'No. rumah',type:'text',req:true},{name:'hp',label:'No. HP',type:'tel'},{name:'status',label:'Status hunian',type:'select',refresh:true,options:['Tetap','Kontrak','Kost',{v:'Kosong',t:'Kosong (tidak ditarik iuran)'},'Lainnya']},...((w&&fs.status==='Kosong'&&db.payments.some(p=>p.wargaId===w.id))?[{type:'info',cls:'warn',html:`Rumah kosong tidak ada uang masuk atau keluar. Rumah ini masih punya ${db.payments.filter(p=>p.wargaId===w.id).length} catatan pembayaran iuran yang menambah saldo kas.`},{name:'hapusBayar',label:'Hapus semua catatan pembayaran rumah ini (salah input)',type:'checkbox'}]:[]),{name:'mulai',label:'Mulai iuran (bulan)',type:'month'},{name:'iuran',label:'Iuran khusus per bulan (kosong = standar)',type:'number',min:0},{name:'bebas',label:'Bebas iuran (tidak masuk tunggakan)',type:'checkbox'},
       ...(isSuper()?[{name:'admin',label:'Tunjuk sebagai admin',type:'checkbox',refresh:true},...(fs.admin?[{name:'pin',label:'PIN admin (min. 4 angka)',type:'text',req:true},{name:'hak',label:'Boleh mengedit menu (admin hanya bisa mengedit yang dicentang)',type:'multicheck',options:HAK_MENU.map(([v,t])=>({v,t}))}]:[])]:[]),
       {name:'foto',label:'Foto (opsional)',type:'file',accept:'image/*',max:360},{name:'catatan',label:'Catatan',type:'textarea',full:true}],
-    validate:fs=>{if(fs.admin&&String(fs.pin).length<4)return 'PIN admin minimal 4 karakter.'},
+    validate:fs=>{if(fs.admin&&String(fs.pin).length<4)return 'PIN admin minimal 4 karakter.';if(w&&fs.status==='Kosong'&&!fs.hapusBayar&&db.payments.some(p=>p.wargaId===w.id))return 'Centang "Hapus semua catatan pembayaran rumah ini" agar saldo kas tidak terhitung dari rumah kosong.'},
     onSave:fs=>{const o={nama:fs.nama.trim(),rumah:String(fs.rumah).trim(),hp:fs.hp,status:fs.status,mulai:fs.mulai,iuran:fs.iuran===''?'':num(fs.iuran),bebas:!!fs.bebas,foto:fs.foto,catatan:fs.catatan};
       if(isSuper()){o.admin=!!fs.admin;o.pin=fs.admin?String(fs.pin):'';o.hak=fs.admin?hakStr(fs.hak):''}
-      if(w)Object.assign(w,o);else db.warga.push({id:uid(),admin:false,pin:'',...o});toast('Tersimpan')}});
+      if(w){if(fs.status==='Kosong'&&fs.hapusBayar)db.payments=db.payments.filter(p=>p.wargaId!==w.id);Object.assign(w,o)}else db.warga.push({id:uid(),admin:false,pin:'',...o});toast('Tersimpan')}});
 }
 act.wargaBaru=()=>formWarga();act.wargaUbah=d=>formWarga(d.id);
 act.wargaDetail=d=>{const w=db.warga.find(x=>x.id===d.id);if(!w)return;const Y=curY(),pay=db.payments.filter(p=>p.wargaId===w.id).sort((a,b)=>b.tahun-a.tahun||b.bulan-a.bulan),tg=tunggakanData(0).find(r=>r.w.id===w.id);
-  $('#modal2').innerHTML=`<div class="ov"><div class="dlg wide"><div class="dh"><h3>${esc(w.nama)}</h3><button class="x" data-act="tutup2" aria-label="Tutup">×</button></div><div class="db"><dl class="kv"><dt>No. rumah</dt><dd>${esc(w.rumah)}</dd><dt>HP</dt><dd>${esc(w.hp)||'–'}</dd><dt>Status</dt><dd>${esc(w.status)}</dd><dt>Iuran</dt><dd>${w.bebas?'Bebas iuran':rp(nominal(w))+' per bulan'}</dd><dt>Tunggakan</dt><dd>${tg?`<span class="stempel tunggak">NUNGGAK</span> ${tg.list.length} bulan (${rp(tg.total)}): ${esc(ringkasBulan(tg.list))}`:'<span class="stempel lunas">LUNAS</span>'}</dd></dl><h3 style="margin:14px 0 6px">Riwayat pembayaran</h3>${T(['Periode',{t:'Jumlah',c:'r'},'Tanggal bayar','Metode'],pay.slice(0,24).map(p=>[`${BULAN[p.bulan-1]} ${p.tahun}`,R(p.jumlah),tgl(p.tanggal),esc(p.metode)]),{empty:'Belum ada pembayaran.'})}</div></div></div>`};
+  $('#modal2').innerHTML=`<div class="ov"><div class="dlg wide"><div class="dh"><h3>${esc(w.nama)}</h3><button class="x" data-act="tutup2" aria-label="Tutup">×</button></div><div class="db"><dl class="kv"><dt>No. rumah</dt><dd>${esc(w.rumah)}</dd><dt>HP</dt><dd>${esc(w.hp)||'–'}</dd><dt>Status</dt><dd>${esc(w.status)}</dd><dt>Iuran</dt><dd>${w.status==='Kosong'?'Rumah kosong (tidak ditarik iuran)':w.bebas?'Bebas iuran':rp(nominal(w))+' per bulan'}</dd><dt>Tunggakan</dt><dd>${tg?`<span class="stempel tunggak">NUNGGAK</span> ${tg.list.length} bulan (${rp(tg.total)}): ${esc(ringkasBulan(tg.list))}`:'<span class="stempel lunas">LUNAS</span>'}</dd></dl><h3 style="margin:14px 0 6px">Riwayat pembayaran</h3>${T(['Periode',{t:'Jumlah',c:'r'},'Tanggal bayar','Metode'],pay.slice(0,24).map(p=>[`${BULAN[p.bulan-1]} ${p.tahun}`,R(p.jumlah),tgl(p.tanggal),esc(p.metode)]),{empty:'Belum ada pembayaran.'})}</div></div></div>`};
 
 /* ================= iuran ================= */
 function pIuran(){
@@ -563,7 +564,7 @@ function pIuran(){
 function tabMatrix(){
   const Y=+ui.f.iy,sel=selF('iy',optTahun(false),'Tahun');
   const paid=new Map(db.payments.filter(p=>p.tahun===Y).map(p=>[`${p.wargaId}|${p.bulan}`,p]));
-  const ws=db.warga.filter(w=>!w.bebas).sort(byRumah);
+  const ws=db.warga.filter(w=>!tanpaIuran(w)).sort(byRumah);
   const tot=Array(12).fill(0);
   const rows=ws.map(w=>{const due=new Set(jatuhTempo(w).filter(x=>x.y===Y).map(x=>x.m));let bayar=0,tg=0;
     const cs=BULAN.map((b,i)=>{const m=i+1,p=paid.get(`${w.id}|${m}`);
@@ -587,7 +588,7 @@ function tabTunggak(){
 function formBayar(wid,y,m){
   openForm({title:'Catat pembayaran iuran',init:{wargaId:wid||'',tahun:y||curY(),bulan:m?[String(m)]:[],tanggal:today(),jumlah:'',metode:'Tunai',bukti:null,ket:''},
     fields:fs=>{const w=db.warga.find(x=>x.id===fs.wargaId),paidM=new Set(db.payments.filter(p=>p.wargaId===fs.wargaId&&p.tahun===+fs.tahun).map(p=>String(p.bulan)));
-      return[{name:'wargaId',label:'Warga',type:'select',req:true,refresh:true,full:true,options:[{v:'',t:'— pilih warga —'},...db.warga.filter(x=>!x.bebas).sort(byRumah).map(x=>({v:x.id,t:`No. ${x.rumah} — ${x.nama}`}))]},
+      return[{name:'wargaId',label:'Warga',type:'select',req:true,refresh:true,full:true,options:[{v:'',t:'— pilih warga —'},...db.warga.filter(x=>!tanpaIuran(x)).sort(byRumah).map(x=>({v:x.id,t:`No. ${x.rumah} — ${x.nama}`}))]},
         {name:'tahun',label:'Tahun',type:'number',req:true,refresh:true},{name:'tanggal',label:'Tanggal bayar',type:'date',req:true},
         {name:'jumlah',label:'Jumlah per bulan (Rp)',type:'number',min:0,ph:w?String(nominal(w)):'Sesuai iuran standar'},{name:'metode',label:'Metode',type:'select',options:['Tunai','Transfer','QRIS','Lainnya']},
         {name:'bulan',label:'Bulan yang dibayar',type:'multicheck',req:true,options:BULAN.map((b,i)=>({v:String(i+1),t:b,disabled:paidM.has(String(i+1)),note:paidM.has(String(i+1))?'sudah lunas':''}))},
@@ -597,16 +598,20 @@ function formBayar(wid,y,m){
     onSave:fs=>{const w=db.warga.find(x=>x.id===fs.wargaId),j=num(fs.jumlah)||(w?nominal(w):0);
       fs.bulan.map(Number).forEach(b=>{if(!db.payments.some(p=>p.wargaId===fs.wargaId&&p.tahun===+fs.tahun&&p.bulan===b))db.payments.push({id:uid(),wargaId:fs.wargaId,tahun:+fs.tahun,bulan:b,jumlah:j,tanggal:fs.tanggal,metode:fs.metode,bukti:fs.bukti,ket:fs.ket})});toast('Pembayaran tercatat')}});
 }
-function formBayarUbah(id){const p=db.payments.find(x=>x.id===id);if(!p)return;const w=db.warga.find(x=>x.id===p.wargaId);
-  openForm({title:'Ubah pembayaran',init:{...p},onHapus:()=>{db.payments=db.payments.filter(x=>x.id!==id)},hapusMsg:'Hapus catatan pembayaran ini?',
-    fields:[{type:'info',html:`<b>${esc(w?w.nama:'(warga dihapus)')}</b> — ${BULAN[p.bulan-1]} ${p.tahun}`},{name:'tanggal',label:'Tanggal bayar',type:'date',req:true},{name:'jumlah',label:'Jumlah (Rp)',type:'number',req:true,min:0},{name:'metode',label:'Metode',type:'select',options:unique(['Tunai','Transfer','QRIS','Lainnya',p.metode])},{name:'bukti',label:'Bukti',type:'file'},{name:'ket',label:'Keterangan',type:'text',full:true}],
-    onSave:fs=>{Object.assign(p,{tanggal:fs.tanggal,jumlah:num(fs.jumlah),metode:fs.metode,bukti:fs.bukti,ket:fs.ket});toast('Tersimpan')}});}
+function formBayarUbah(id){const p=db.payments.find(x=>x.id===id);if(!p)return;
+  openForm({title:'Ubah pembayaran iuran',init:{...p,bulan:String(p.bulan)},onHapus:()=>{db.payments=db.payments.filter(x=>x.id!==id)},hapusMsg:'Hapus catatan pembayaran ini?',
+    fields:[{type:'info',html:'Perbaiki di sini jika salah memilih warga, bulan, tahun, atau jumlah.'},
+      {name:'wargaId',label:'Warga',type:'select',req:true,full:true,options:db.warga.filter(w=>!tanpaIuran(w)||w.id===p.wargaId).sort(byRumah).map(w=>({v:w.id,t:`No. ${w.rumah} — ${w.nama}`}))},
+      {name:'bulan',label:'Bulan',type:'select',options:BULAN.map((b,i)=>({v:String(i+1),t:b}))},{name:'tahun',label:'Tahun',type:'number',req:true},
+      {name:'tanggal',label:'Tanggal bayar',type:'date',req:true},{name:'jumlah',label:'Jumlah (Rp)',type:'number',req:true,min:0},{name:'metode',label:'Metode',type:'select',options:unique(['Tunai','Transfer','QRIS','Lainnya',p.metode])},{name:'bukti',label:'Bukti',type:'file'},{name:'ket',label:'Keterangan',type:'text',full:true}],
+    validate:fs=>db.payments.some(x=>x.id!==id&&x.wargaId===fs.wargaId&&x.tahun===+fs.tahun&&x.bulan===+fs.bulan)?'Pembayaran warga ini untuk bulan dan tahun tersebut sudah ada.':null,
+    onSave:fs=>{Object.assign(p,{wargaId:fs.wargaId,bulan:+fs.bulan,tahun:+fs.tahun,tanggal:fs.tanggal,jumlah:num(fs.jumlah),metode:fs.metode,bukti:fs.bukti,ket:fs.ket});toast('Pembayaran diperbarui')}});}
 act.bayarBaru=()=>formBayar();act.bayarCell=d=>formBayar(d.w,+ui.f.iy,+d.m);act.bayarUbah=d=>formBayarUbah(d.id);
 
 /* ================= buku kas ================= */
 function kasRows(){const Y=+ui.f.ky,Mo=+ui.f.km,J=ui.f.kj;let saldo=+db.settings.saldoAwal||0;const all=ledger().map(r=>{saldo+=r.jenis==='masuk'?r.jumlah:-r.jumlah;return{...r,saldo}});
   return all.filter(r=>(!Y||+r.tanggal.slice(0,4)===Y)&&(!Mo||+r.tanggal.slice(5,7)===Mo)&&(!J||r.jenis===J)&&match('kas',r.uraian,r.kategori))}
-function tblKas(){const rows=kasRows();return T(['Tanggal','Uraian','Kategori',{t:'Masuk',c:'r'},{t:'Keluar',c:'r'},{t:'Saldo',c:'r'},'Bukti',{t:'',c:'aksi'}],rows.map(r=>[tgl(r.tanggal),esc(r.uraian)+(r.auto?' <span class="chip">otomatis</span>':''),esc(r.kategori),r.jenis==='masuk'?R(r.jumlah):{t:'',c:'r'},r.jenis==='keluar'?R(r.jumlah):{t:'',c:'r'},R(r.saldo),buktiBtn(r.col,r.id,'bukti',r.bukti),r.auto?{t:'',c:'aksi'}:aksiCell('kas',r.id,'transaksi ini','kasUbah')]),{foot:['Total (sesuai filter)','','',R(sum(rows.filter(r=>r.jenis==='masuk'),r=>r.jumlah)),R(sum(rows.filter(r=>r.jenis==='keluar'),r=>r.jumlah)),R(saldoTotal()),'','']})}
+function tblKas(){const rows=kasRows();return T(['Tanggal','Uraian','Kategori',{t:'Masuk',c:'r'},{t:'Keluar',c:'r'},{t:'Saldo',c:'r'},'Bukti',{t:'',c:'aksi'}],rows.map(r=>[tgl(r.tanggal),esc(r.uraian)+(r.auto?' <span class="chip">otomatis</span>':''),esc(r.kategori),r.jenis==='masuk'?R(r.jumlah):{t:'',c:'r'},r.jenis==='keluar'?R(r.jumlah):{t:'',c:'r'},R(r.saldo),buktiBtn(r.col,r.id,'bukti',r.bukti),r.auto?{c:'aksi',t:(r.col==='payments'&&canEdit('iuran')?btn('bayarUbah','Ubah iuran',`data-id="${r.id}"`,'kecil'):'')}:aksiCell('kas',r.id,'transaksi ini','kasUbah')]),{foot:['Total (sesuai filter)','','',R(sum(rows.filter(r=>r.jenis==='masuk'),r=>r.jumlah)),R(sum(rows.filter(r=>r.jenis==='keluar'),r=>r.jumlah)),R(saldoTotal()),'','']})}
 function pKas(){
   const Y=+ui.f.ky;
   return ph('Buku kas',`Saldo kas saat ini <b>${rp(saldoTotal())}</b>. Iuran dan denda ronda yang lunas masuk otomatis.`,can()?btn('kasMasuk','+ Kas masuk','','utama')+btn('kasKeluar','− Kas keluar'):'')+
