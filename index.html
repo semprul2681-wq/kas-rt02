@@ -292,7 +292,7 @@ let db;
 let session=null;
 (function(){try{const s=JSON.parse(sget(SKEY)||'null');if(s&&(s.role==='viewer'||s.role==='super'||(s.role==='admin'&&db.warga.some(w=>w.id===s.id&&w.admin))))session=s}catch(e){}})();
 const isSuper=()=>!!session&&session.role==='super';
-const can=()=>!!session&&(session.role==='super'||session.role==='admin');
+const can=()=>!!session&&(session.role==='super'||(session.role==='admin'&&menuOk(ui.page)));
 const ui={page:'beranda',tab:{},q:{},f:{ iy:curY(),py:curY(),pm:0,ty:0,ky:curY(),km:0,kj:'',ly:curY(),lm:curM(),lj:'bulanan',ry:curY(),rb:curM(),saya:sget(SAYA)||''},minggu:0,login:{mode:null,err:''}};
 const TBL={};const GEN={};
 function toast(msg,type){const t=$('#toast');t.innerHTML='<div class="'+(type||'')+'">'+esc(msg)+'</div>';clearTimeout(toast.t);toast.t=setTimeout(()=>{t.innerHTML=''},3200)}
