@@ -307,7 +307,7 @@ let session=null;
 (function(){try{const s=JSON.parse(sget(SKEY)||'null');if(s&&(s.role==='viewer'||s.role==='super'||(s.role==='admin'&&db.warga.some(w=>w.id===s.id&&w.admin))))session=s}catch(e){}})();
 const isSuper=()=>!!session&&session.role==='super';
 const can=()=>canEdit(ui.page);
-const ui={page:'beranda',tab:{},q:{},f:{ iy:curY(),py:curY(),pm:0,ty:0,ky:curY(),km:0,kj:'',ly:curY(),lm:curM(),lj:'bulanan',ry:curY(),rb:curM(),saya:sget(SAYA)||''},minggu:0,login:{mode:null,err:''}};
+const ui={page:'beranda',tab:{},q:{},f:{ iy:curY(),py:curY(),pm:0,ty:0,im:0,tm:0,ky:curY(),km:0,kj:'',ly:curY(),lm:curM(),lj:'bulanan',ry:curY(),rb:curM(),saya:sget(SAYA)||''},minggu:0,login:{mode:null,err:''}};
 const TBL={};const GEN={};
 function toast(msg,type){const t=$('#toast');t.innerHTML='<div class="'+(type||'')+'">'+esc(msg)+'</div>';clearTimeout(toast.t);toast.t=setTimeout(()=>{t.innerHTML=''},3200)}
 
@@ -439,9 +439,9 @@ function jatuhTempo(w){
   let sy=+db.settings.tahunMulai||cy,sm=1;if(w.mulai&&/^\d{4}-\d{2}$/.test(w.mulai)){[sy,sm]=w.mulai.split('-').map(Number)}
   const out=[];for(let y=sy;y<=cy;y++)for(let m=(y===sy?sm:1);m<=(y===cy?(lewat?cm:cm-1):12);m++)out.push({y,m});return out;
 }
-function tunggakanData(fy){
+function tunggakanData(fy,fm){
   const paid=new Set(db.payments.map(p=>`${p.wargaId}|${p.tahun}|${p.bulan}`));
-  return db.warga.filter(w=>!tanpaIuran(w)).sort(byRumah).map(w=>{const list=jatuhTempo(w).filter(x=>(!fy||x.y===fy)&&!paid.has(`${w.id}|${x.y}|${x.m}`));return{w,list,total:list.length*nominal(w)}}).filter(r=>r.list.length);
+  return db.warga.filter(w=>!tanpaIuran(w)).sort(byRumah).map(w=>{const list=jatuhTempo(w).filter(x=>(!fy||x.y===fy)&&(!fm||x.m===fm)&&!paid.has(`${w.id}|${x.y}|${x.m}`));return{w,list,total:list.length*nominal(w)}}).filter(r=>r.list.length);
 }
 function ringkasBulan(list){const g={};list.forEach(x=>{(g[x.y]=g[x.y]||[]).push(BLN[x.m-1])});return Object.entries(g).map(([y,a])=>a.join(', ')+' '+y).join('; ')}
 function ledger(){
@@ -591,17 +591,17 @@ function pIuran(){
   return ph('Iuran warga',`Iuran standar ${rp(db.settings.iuran)} per bulan, paling lambat tanggal ${db.settings.batasBayar}. Hanya rumah berpenghuni yang ditarik iuran; ${rumahStat().kosong} rumah kosong tidak ditarik.`,can()?btn('bayarBaru','Catat pembayaran','','utama'):'')+tabs('iuran',TAB_IURAN)+(!subOk('iuran',t)?kunciMsg():t==='matrix'?tabMatrix():t==='bayar'?tabBayar():tabTunggak());
 }
 function tabMatrix(){
-  const Y=+ui.f.iy,sel=selF('iy',optTahun(false),'Tahun');
+  const Y=+ui.f.iy,Mo=+ui.f.im||0,ms=Mo?[Mo]:[1,2,3,4,5,6,7,8,9,10,11,12],sel=selF('iy',optTahun(false),'Tahun')+selF('im',optBulan(true),'Bulan');
   const paid=new Map(db.payments.filter(p=>p.tahun===Y).map(p=>[`${p.wargaId}|${p.bulan}`,p]));
   const ws=db.warga.filter(w=>!tanpaIuran(w)).sort(byRumah);
   const tot=Array(12).fill(0);
   const rows=ws.map(w=>{const due=new Set(jatuhTempo(w).filter(x=>x.y===Y).map(x=>x.m));let bayar=0,tg=0;
-    const cs=BULAN.map((b,i)=>{const m=i+1,p=paid.get(`${w.id}|${m}`);
+    const cs=ms.map(m=>{const i=m-1,p=paid.get(`${w.id}|${m}`);
       if(p){bayar+=+p.jumlah;tot[i]+=+p.jumlah;return{t:can()?`<button class="sel ok" data-act="bayarUbah" data-id="${p.id}" title="${rp(p.jumlah)} – ${tgl(p.tanggal)}">✓</button>`:`<span class="sel ok" title="${rp(p.jumlah)}">✓</span>`,c:'c',n:+p.jumlah}}
       if(due.has(m)){tg++;return{t:can()?`<button class="sel no" data-act="bayarCell" data-w="${w.id}" data-m="${m}" title="Belum bayar – klik untuk catat">✗</button>`:`<span class="sel no">✗</span>`,c:'c'}}
       return{t:'<span class="sel na">–</span>',c:'c'}});
-    return[`<b>${esc(w.nama)}</b><br><small>No. ${esc(w.rumah)}</small>`,...cs,R(bayar),{t:tg?`<span class="chip t">${tg} bln</span>`:'<span class="chip h">lunas</span>',c:'c'}]});
-  return `<section class="lembar"><div class="bar">${sel}<span class="sp"></span>${expBtns('#tbl-matrix','Iuran bulanan warga '+Y,'Tahun '+Y+' • ✓ lunas, ✗ belum bayar',{land:true,ttd:false})}</div><p><small>✓ sudah bayar &nbsp; ✗ belum bayar (sudah jatuh tempo) &nbsp; – belum jatuh tempo.${can()?' Klik tanda untuk mencatat atau mengubah pembayaran.':''}</small></p>${tblBox('matrix',()=>T(['Warga',...BLN,{t:'Dibayar',c:'r'},{t:'Status',c:'c'}],rows,{cls:'mx',foot:['Total',...tot.map(R),R(sum(tot,x=>x)),'']}))}</section>`;
+    return[`<b>${esc(w.nama)}</b><br><small>No. ${esc(w.rumah)}</small>`,...cs,R(bayar),{t:Mo?(bayar>0?'<span class="chip h">lunas</span>':tg?'<span class="chip t">belum</span>':'<span class="chip">–</span>'):(tg?`<span class="chip t">${tg} bln</span>`:'<span class="chip h">lunas</span>'),c:'c'}]});
+  return `<section class="lembar"><div class="bar">${sel}<span class="sp"></span>${expBtns('#tbl-matrix','Iuran bulanan warga '+Y+(Mo?' – '+BULAN[Mo-1]:''),'Tahun '+Y+(Mo?' • bulan '+BULAN[Mo-1]:'')+' • ✓ lunas, ✗ belum bayar',{land:Mo?false:true,ttd:false})}</div><p><small>✓ sudah bayar &nbsp; ✗ belum bayar (sudah jatuh tempo) &nbsp; – belum jatuh tempo.${can()?' Klik tanda untuk mencatat atau mengubah pembayaran.':''}</small></p>${tblBox('matrix',()=>T(['Warga',...ms.map(m=>BLN[m-1]),{t:'Dibayar',c:'r'},{t:'Status',c:'c'}],rows,{cls:'mx',foot:['Total',...ms.map(m=>R(tot[m-1])),R(sum(ms,m=>tot[m-1])),'']}))}</section>`;
 }
 function tabBayar(){
   const Y=+ui.f.py,Mo=+ui.f.pm;
@@ -610,9 +610,9 @@ function tabBayar(){
   return `<section class="lembar"><div class="bar">${selF('py',optTahun(true),'Tahun')}${selF('pm',optBulan(true),'Bulan')}${cari('bayar','Nama warga, metode…')}<span class="sp"></span>${expBtns('#tbl-bayar','Daftar pembayaran iuran','Tahun '+(Y||'semua'))}</div><div id="tbl-bayar">${TBL.bayar()}</div></section>`;
 }
 function tabTunggak(){
-  const Y=+ui.f.ty;
-  const rows=tunggakanData(Y);const total=sum(rows,r=>r.total);
-  return `<section class="lembar"><div class="bar">${selF('ty',optTahun(true),'Tahun')}<span class="sp"></span>${expBtns('#tbl-tunggak','Rekap tunggakan iuran','Per '+tgl(today())+(Y?' • tahun '+Y:' • semua tahun'))}</div><div id="tbl-tunggak">${T(['Warga','No. rumah',{t:'Jumlah bulan',c:'r'},'Bulan yang belum dibayar',{t:'Tunggakan',c:'r'},{t:'',c:'aksi'}],rows.map(r=>[esc(r.w.nama),esc(r.w.rumah),{t:r.list.length,c:'r'},esc(ringkasBulan(r.list)),R(r.total),{c:'aksi',t:can()?btn('bayarTunggak','Bayar tunggakan',`data-id="${r.w.id}"`,'kecil utama'):''}]),{empty:'Tidak ada tunggakan. Semua warga lunas.',foot:[`${rows.length} warga`,'',{t:sum(rows,r=>r.list.length),c:'r'},'',R(total),'']})}</div></section>`;
+  const Y=+ui.f.ty,Mo=+ui.f.tm||0;
+  const rows=tunggakanData(Y,Mo);const total=sum(rows,r=>r.total);
+  return `<section class="lembar"><div class="bar">${selF('ty',optTahun(true),'Tahun')}${selF('tm',optBulan(true),'Bulan')}<span class="sp"></span>${expBtns('#tbl-tunggak','Rekap tunggakan iuran','Per '+tgl(today())+(Y?' • tahun '+Y:' • semua tahun')+(Mo?' • bulan '+BULAN[Mo-1]:''))}</div><div id="tbl-tunggak">${T(['Warga','No. rumah',{t:'Jumlah bulan',c:'r'},'Bulan yang belum dibayar',{t:'Tunggakan',c:'r'},{t:'',c:'aksi'}],rows.map(r=>[esc(r.w.nama),esc(r.w.rumah),{t:r.list.length,c:'r'},esc(ringkasBulan(r.list)),R(r.total),{c:'aksi',t:can()?btn('bayarTunggak','Bayar tunggakan',`data-id="${r.w.id}"`,'kecil utama'):''}]),{empty:'Tidak ada tunggakan. Semua warga lunas.',foot:[`${rows.length} warga`,'',{t:sum(rows,r=>r.list.length),c:'r'},'',R(total),'']})}</div></section>`;
 }
 function formBayar(wid,y,m){
   openForm({title:'Catat pembayaran iuran',init:{wargaId:wid||'',tahun:y||curY(),bulan:m?[String(m)]:[],tanggal:today(),jumlah:'',metode:'Tunai',bukti:null,ket:''},
