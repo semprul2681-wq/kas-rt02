@@ -446,7 +446,7 @@ function tunggakanData(fy,fm){
 function ringkasBulan(list){const g={};list.forEach(x=>{(g[x.y]=g[x.y]||[]).push(BLN[x.m-1])});return Object.entries(g).map(([y,a])=>a.join(', ')+' '+y).join('; ')}
 function ledger(){
   const rows=[],s=db.settings;
-  db.payments.forEach(p=>{const w=db.warga.find(x=>x.id===p.wargaId);rows.push({tanggal:p.tanggal,jenis:'masuk',kategori:'Iuran bulanan',uraian:`${p.tg?'Bayar tunggakan iuran':'Iuran'} ${w?w.nama+' (No. '+w.rumah+')':'warga'} – ${BULAN[p.bulan-1]} ${p.tahun}${p.tg?' (bayar tunggakan)':''}`,jumlah:+p.jumlah,auto:true,col:'payments',id:p.id,bukti:p.bukti})});
+  db.payments.forEach(p=>{const w=db.warga.find(x=>x.id===p.wargaId);rows.push({pBln:p.bulan,pThn:p.tahun,tanggal:p.tanggal,jenis:'masuk',kategori:'Iuran bulanan',uraian:`${p.tg?'Bayar tunggakan iuran':'Iuran'} ${w?w.nama+' (No. '+w.rumah+')':'warga'} – ${BULAN[p.bulan-1]} ${p.tahun}${p.tg?' (bayar tunggakan)':''}`,jumlah:+p.jumlah,auto:true,col:'payments',id:p.id,bukti:p.bukti})});
   db.jadwal.forEach(j=>Object.entries(j.absen||{}).forEach(([aid,r])=>{if((r.status==='izin'||r.status==='tidak')&&r.lunas)rows.push({tanggal:r.tglLunas||j.tanggal,jenis:'masuk',kategori:'Denda ronda',uraian:`Denda ronda ${namaAg(aid)} (${r.status==='izin'?'izin':'tidak hadir'}) – ${tgl(j.tanggal)}`,jumlah:+(r.denda||s.denda),auto:true,col:'jadwal',id:j.id,bukti:null})}));
   db.kas.forEach(k=>rows.push({tanggal:k.tanggal,jenis:k.jenis,kategori:k.kategori,uraian:k.uraian,jumlah:+k.jumlah,auto:false,col:'kas',id:k.id,bukti:k.bukti}));
   rows.sort((a,b)=>a.tanggal.localeCompare(b.tanggal)||(a.jenis===b.jenis?0:a.jenis==='masuk'?-1:1));
@@ -603,11 +603,11 @@ function tabMatrix(){
     return[`<b>${esc(w.nama)}</b><br><small>No. ${esc(w.rumah)}</small>`,...cs,R(bayar),{t:Mo?(bayar>0?'<span class="chip h">lunas</span>':tg?'<span class="chip t">belum</span>':'<span class="chip">–</span>'):(tg?`<span class="chip t">${tg} bln</span>`:'<span class="chip h">lunas</span>'),c:'c'}]});
   return `<section class="lembar"><div class="bar">${sel}<span class="sp"></span>${expBtns('#tbl-matrix','Iuran bulanan warga '+Y+(Mo?' – '+BULAN[Mo-1]:''),'Tahun '+Y+(Mo?' • bulan '+BULAN[Mo-1]:'')+' • ✓ lunas, ✗ belum bayar',{land:Mo?false:true,ttd:false})}</div><p><small>✓ sudah bayar &nbsp; ✗ belum bayar (sudah jatuh tempo) &nbsp; – belum jatuh tempo.${can()?' Klik tanda untuk mencatat atau mengubah pembayaran.':''}</small></p>${tblBox('matrix',()=>T(['Warga',...ms.map(m=>BLN[m-1]),{t:'Dibayar',c:'r'},{t:'Status',c:'c'}],rows,{cls:'mx',foot:['Total',...ms.map(m=>R(tot[m-1])),R(sum(ms,m=>tot[m-1])),'']}))}</section>`;
 }
-function tabBayar(){
+function tabBayar(){ui.f.pd=ui.f.pd||'periode';
   const Y=+ui.f.py,Mo=+ui.f.pm;
-  TBL.bayar=()=>{const rows=db.payments.filter(p=>(!Y||p.tahun===Y)&&(!Mo||p.bulan===Mo)).filter(p=>{const w=db.warga.find(x=>x.id===p.wargaId);return match('bayar',w?w.nama:'',w?w.rumah:'',p.metode,p.ket)}).sort((a,b)=>b.tanggal.localeCompare(a.tanggal));
+  TBL.bayar=()=>{const byTgl=(ui.f.pd||'periode')==='tanggal';const rows=db.payments.filter(p=>(!Y||(byTgl?+p.tanggal.slice(0,4):p.tahun)===Y)&&(!Mo||(byTgl?+p.tanggal.slice(5,7):p.bulan)===Mo)).filter(p=>{const w=db.warga.find(x=>x.id===p.wargaId);return match('bayar',w?w.nama:'',w?w.rumah:'',p.metode,p.ket)}).sort((a,b)=>b.tanggal.localeCompare(a.tanggal));
     return T(['Tanggal bayar','Warga','No.','Periode',{t:'Jumlah',c:'r'},'Metode','Bukti',{t:'',c:'aksi'}],rows.map(p=>{const w=db.warga.find(x=>x.id===p.wargaId);return[tgl(p.tanggal),esc(w?w.nama:'(dihapus)'),esc(w?w.rumah:''),`${BULAN[p.bulan-1]} ${p.tahun}`,R(p.jumlah),esc(p.metode),buktiBtn('payments',p.id,'bukti',p.bukti),aksiCell('payments',p.id,'pembayaran ini','bayarUbah')]}),{foot:['Total','','','',R(sum(rows,p=>+p.jumlah)),'','','']})};
-  return `<section class="lembar"><div class="bar">${selF('py',optTahun(true),'Tahun')}${selF('pm',optBulan(true),'Bulan')}${cari('bayar','Nama warga, metode…')}<span class="sp"></span>${expBtns('#tbl-bayar','Daftar pembayaran iuran','Tahun '+(Y||'semua'))}</div><div id="tbl-bayar">${TBL.bayar()}</div></section>`;
+  return `<section class="lembar"><div class="bar">${selF('py',optTahun(true),'Tahun')}${selF('pm',optBulan(true),'Bulan')}${selF('pd',[{v:'periode',t:'Periode iuran'},{v:'tanggal',t:'Tanggal bayar'}],'Bulan berdasarkan')}${cari('bayar','Nama warga, metode…')}<span class="sp"></span>${expBtns('#tbl-bayar','Daftar pembayaran iuran','Tahun '+(Y||'semua'))}</div><div id="tbl-bayar">${TBL.bayar()}</div></section>`;
 }
 function tabTunggak(){
   const Y=+ui.f.ty,Mo=+ui.f.tm||0;
@@ -655,12 +655,13 @@ act.bayarBaru=()=>formBayar();act.bayarCell=d=>formBayar(d.w,+ui.f.iy,+d.m);act.
 
 /* ================= buku kas ================= */
 function kasRows(){const Y=+ui.f.ky,Mo=+ui.f.km,J=ui.f.kj;let saldo=+db.settings.saldoAwal||0;const all=ledger().map(r=>{saldo+=r.jenis==='masuk'?r.jumlah:-r.jumlah;return{...r,saldo}});
-  return all.filter(r=>(!Y||+r.tanggal.slice(0,4)===Y)&&(!Mo||+r.tanggal.slice(5,7)===Mo)&&(!J||r.jenis===J)&&match('kas',r.uraian,r.kategori))}
+  const per=(ui.f.kd||'tanggal')==='periode',thn=r=>(per&&r.pThn)?+r.pThn:+r.tanggal.slice(0,4),bln=r=>(per&&r.pBln)?+r.pBln:+r.tanggal.slice(5,7);
+  return all.filter(r=>(!Y||thn(r)===Y)&&(!Mo||bln(r)===Mo)&&(!J||r.jenis===J)&&match('kas',r.uraian,r.kategori))}
 function tblKas(){const rows=kasRows();return T(['Tanggal','Uraian','Kategori',{t:'Masuk',c:'r'},{t:'Keluar',c:'r'},{t:'Saldo',c:'r'},'Bukti',{t:'',c:'aksi'}],rows.map(r=>[tgl(r.tanggal),esc(r.uraian)+(r.auto?' <span class="chip">otomatis</span>':''),esc(r.kategori),r.jenis==='masuk'?R(r.jumlah):{t:'',c:'r'},r.jenis==='keluar'?R(r.jumlah):{t:'',c:'r'},R(r.saldo),buktiBtn(r.col,r.id,'bukti',r.bukti),r.auto?{c:'aksi',t:(r.col==='payments'&&canEdit('iuran')?btn('bayarUbah','Ubah iuran',`data-id="${r.id}"`,'kecil'):'')}:aksiCell('kas',r.id,'transaksi ini','kasUbah')]),{foot:['Total (sesuai filter)','','',R(sum(rows.filter(r=>r.jenis==='masuk'),r=>r.jumlah)),R(sum(rows.filter(r=>r.jenis==='keluar'),r=>r.jumlah)),R(saldoTotal()),'','']})}
-function pKas(){
+function pKas(){ui.f.kd=ui.f.kd||'tanggal';
   const Y=+ui.f.ky;
   return ph('Buku kas',`Saldo kas saat ini <b>${rp(saldoTotal())}</b>. Iuran dan denda ronda yang lunas masuk otomatis.`,can()?btn('kasMasuk','+ Kas masuk','','utama')+btn('kasKeluar','− Kas keluar'):'')+
-  `<section class="lembar"><div class="bar">${selF('ky',optTahun(true),'Tahun')}${selF('km',optBulan(true),'Bulan')}${selF('kj',[{v:'',t:'Semua'},{v:'masuk',t:'Kas masuk'},{v:'keluar',t:'Kas keluar'}],'Jenis')}${cari('kas','Uraian, kategori…')}<span class="sp"></span>${expBtns('#tbl-kas','Buku kas',Y?'Tahun '+Y:'Semua periode',{land:true})}</div>${tblBox('kas',tblKas)}</section>
+  `<section class="lembar"><div class="bar">${selF('ky',optTahun(true),'Tahun')}${selF('km',optBulan(true),'Bulan')}${selF('kd',[{v:'tanggal',t:'Tanggal transaksi'},{v:'periode',t:'Periode iuran'}],'Bulan berdasarkan')}${selF('kj',[{v:'',t:'Semua'},{v:'masuk',t:'Kas masuk'},{v:'keluar',t:'Kas keluar'}],'Jenis')}${cari('kas','Uraian, kategori…')}<span class="sp"></span>${expBtns('#tbl-kas','Buku kas',Y?'Tahun '+Y:'Semua periode',{land:true})}</div>${tblBox('kas',tblKas)}</section>
   <section class="lembar"><h3>Pengeluaran per kategori</h3>${(()=>{const g={};kasRows().filter(r=>r.jenis==='keluar').forEach(r=>g[r.kategori]=(g[r.kategori]||0)+r.jumlah);const e=Object.entries(g).sort((a,b)=>b[1]-a[1]);return T(['Kategori',{t:'Jumlah',c:'r'}],e.map(([k,v])=>[esc(k),R(v)]),{empty:'Belum ada pengeluaran pada filter ini.',foot:['Total',R(sum(e,x=>x[1]))]})})()}</section>`;
 }
 function formKas(jenis,id){
