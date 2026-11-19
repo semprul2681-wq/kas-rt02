@@ -1,6 +1,8 @@
 <!DOCTYPE html>
+<!-- Buku Kas & Ronda RT 02 / RW 10 - Created by Al_One -->
 <html lang="id">
 <head>
+<meta name="author" content="Al_One">
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>Buku Kas &amp; Ronda RT 02 / RW 10</title>
@@ -148,6 +150,8 @@ fieldset.fld{border:1px solid var(--garis);border-radius:3px;margin:0;padding:8p
 .pilih button span{font-size:.85rem;color:var(--tinta2)}
 .hint{font-size:.82rem;color:var(--tinta2);margin-top:10px}
 #printArea{display:none}
+.kredit{font-size:.78rem;opacity:.8;margin:12px 0 0;text-align:center}
+.pasang{margin-top:8px;text-align:center}
 .syn{display:inline-block;font-size:.76rem;padding:1px 9px;border-radius:10px;margin-bottom:4px;background:rgba(255,255,255,.18)}
 .syn.online{background:#2E7D5B;color:#fff}.syn.offline,.syn.menyambung{background:var(--stabilo);color:var(--onstabilo)}.syn.ditolak{background:var(--merah);color:#fff}
 .lembar .syn{background:var(--garis2);color:var(--tinta)}.lembar .syn.online{background:var(--hijau2);color:var(--hijau)}
@@ -495,6 +499,14 @@ function unduhBlob(blob,name){const a=document.createElement('a');a.href=URL.cre
 const expBtns=(sel,judul,sub,o)=>{o=o||{};const d=`data-${o.gen?'gen':'s'}="${esc(o.gen||sel)}" data-j="${esc(judul)}" data-sub="${esc(sub||'')}" ${o.land?'data-land="1"':''} ${o.ttd===false?'data-ttd="0"':''}`;return `${btn('cetak','Cetak',d)}${btn('pdf','PDF',d)}${btn('xls','Excel',d)}`};
 
 /* ================= halaman: login ================= */
+let instPrompt=null;
+const sudahTerpasang=()=>{try{return(window.matchMedia&&matchMedia('(display-mode: standalone)').matches)||navigator.standalone===true}catch(e){return false}};
+window.addEventListener('beforeinstallprompt',e=>{e.preventDefault();instPrompt=e;if(!$('#modal').innerHTML&&!ui.login.mode)render()});
+window.addEventListener('appinstalled',()=>{instPrompt=null;toast('Aplikasi terpasang');render()});
+function pasangHTML(kecil){if(sudahTerpasang())return '';
+  if(instPrompt)return `<div class="pasang">${btn('pasang','Pasang aplikasi','','utama kecil')}</div>`;
+  return kecil?'':`<p class="hint" style="text-align:center">Agar ikon tidak hilang, pasang lewat menu Chrome (titik tiga), pilih <b>Instal aplikasi</b>, bukan Buat pintasan.</p>`}
+act.pasang=async()=>{if(!instPrompt)return;instPrompt.prompt();try{await instPrompt.userChoice}catch(e){}instPrompt=null;render()};
 function loginView(){
   const s=db.settings,L=ui.login,admins=db.warga.filter(w=>w.admin).sort(byNama);
   let form='';
@@ -504,6 +516,7 @@ function loginView(){
   ${L.mode?`<div class="grid" style="display:block">${form}</div><p class="ferr">${esc(L.err||'')}</p><div class="acts"><button class="btn" data-act="pilihMode" data-m="">Kembali</button>${(L.mode==='super'||admins.length)?'<button class="btn utama" data-act="masuk">Masuk</button>':''}</div>`:
   `<div class="pilih"><button data-act="masukViewer"><b>Warga</b><span>Melihat kas, tunggakan, aset, dan jadwal ronda</span></button><button data-act="pilihMode" data-m="admin"><b>Admin</b><span>Warga yang ditunjuk: mengisi data kas, iuran, dan ronda</span></button><button data-act="pilihMode" data-m="super"><b>Super user</b><span>Mengelola semua data, admin, dan pengaturan</span></button></div>`}
   ${(!L.mode&&s.pinSuper==='123456')?'<p class="hint">PIN awal super user: 123456. Segera ganti di Pengaturan setelah masuk.</p>':''}
+  <p class="kredit">Created by Al_One</p>${pasangHTML()}
   </div></div>`;
 }
 act.pilihMode=d=>{ui.login={mode:d.m||null,err:''};render()};
@@ -531,14 +544,14 @@ function navHTML(){
   return `<nav class="nav" aria-label="Menu utama"><div class="label"><img class="logo" src="${LOGO}" alt="Logo Graha Rafflesia RT 02 RW 10"><div class="l1">BUKU KAS</div><div class="l2">${namaLing()}</div><div class="l3">${esc(s.nama||s.kelurahan||'')}</div></div>
   ${Object.entries(PAGES).filter(([k,p])=>!p.su||isSuper()).map(([k,p])=>{const ok=menuOk(k);return `<a role="button" tabindex="0" class="${ui.page===k?'on':''}${ok?'':' kunci'}"${ok?'':' aria-disabled="true"'} data-act="nav" data-p="${k}">${p.l}${ok?'':' <span aria-label="terkunci">🔒</span>'}</a>`}).join('')}
   <div class="gap"></div>${n?`<div class="nxt">Ronda: ${esc(tglHari(n.tanggal))}<br>${hariTxt(n.hari)}</div>`:''}
-  <div class="usr">${esc(role)}<br><span class="syn ${sync.state} synT">${synLabel()}</span><br><button data-act="keluar">Keluar</button></div></nav>`;
+  <div class="usr">${esc(role)}<br><span class="syn ${sync.state} synT">${synLabel()}</span><br><button data-act="keluar">Keluar</button>${pasangHTML(true)}<br><small class="kredit">Created by Al_One</small></div></nav>`;
 }
 function render(){
   const app=$('#app'),y=window.scrollY;
   if(!session){app.innerHTML=loginView();return}
   if(!menuOk(ui.page))ui.page='beranda';
   Object.keys(TBL).forEach(k=>delete TBL[k]);
-  app.innerHTML=`<div class="shell">${navHTML()}<main>${(session.role==='admin'&&!['beranda','laporan','setting'].includes(ui.page)&&!canEdit(ui.page))?'<div class="notice">Anda hanya dapat melihat menu ini. Hak edit diatur oleh super user.</div>':''}${persist?'':'<div class="notice">Mode pratinjau: data tidak tersimpan permanen. Simpan file ini ke perangkat lalu buka lewat browser agar data tersimpan, atau unduh cadangan di menu Pengaturan.</div>'}${PAGES[ui.page].fn()}</main></div>`;
+  app.innerHTML=`<div class="shell">${navHTML()}<main>${(session.role==='admin'&&!['beranda','laporan','setting'].includes(ui.page)&&!canEdit(ui.page))?'<div class="notice">Anda hanya dapat melihat menu ini. Hak edit diatur oleh super user.</div>':''}${persist?'':'<div class="notice">Mode pratinjau: data tidak tersimpan permanen. Simpan file ini ke perangkat lalu buka lewat browser agar data tersimpan, atau unduh cadangan di menu Pengaturan.</div>'}${PAGES[ui.page].fn()}<footer class="kredit" style="margin-top:28px">Created by Al_One</footer></main></div>`;
   window.scrollTo(0,y);
 }
 function tblBox(k,fn){TBL[k]=fn;return `<div id="tbl-${k}">${fn()}</div>`}
@@ -974,6 +987,8 @@ act.syncUndang=()=>{if(!sync.cfg)return;const link=location.href.split('#')[0]+'
   try{sync.cfg=JSON.parse(sget(CFGKEY)||'null')}catch(e){sync.cfg=null}
   if(!sync.cfg&&SYNC_DEFAULT.url&&SYNC_DEFAULT.kode)sync.cfg=SYNC_DEFAULT})();
 
+try{if(navigator.storage&&navigator.storage.persist)navigator.storage.persist()}catch(e){}
+try{console.info('Buku Kas & Ronda RT 02/RW 10 - Created by Al_One')}catch(e){}
 render();
 startSync();
 })();
