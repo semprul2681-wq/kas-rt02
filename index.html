@@ -641,6 +641,10 @@ function banner(){
   if(!n)return `<div class="stabilo"><b>Belum ada jadwal ronda.</b> Ronda diadakan setiap Sabtu malam (malam Minggu). ${can()?'Buat jadwal di menu Ronda.':''}</div>`;
   return `<div class="stabilo"><b>Ronda berikutnya: ${esc(tglHari(n.tanggal))} (${hariTxt(n.hari)})</b><ul>${n.entries.map(j=>`<li>${esc(j.sesi)} • ${esc(j.pos)} • ${esc(j.kelompok||'tanpa kelompok')}: ${j.petugas.map(id=>esc(namaAg(id))+(id===j.koordinator?' (koordinator)':'')).join(', ')||'belum ada petugas'}</li>`).join('')}</ul></div>`;
 }
+function dendaList(){const r=[];db.jadwal.forEach(j=>Object.entries(j.absen||{}).forEach(([id,a])=>{if(isDenda(a))r.push({t:j.tanggal,sesi:j.sesi,nama:namaAg(id),st:a.status,lapor:!!a.lapor,den:dendaOf(a),lunas:!!a.lunas})}));return r.sort((x,y)=>y.t.localeCompare(x.t)||x.nama.localeCompare(y.nama))}
+function dendaBeranda(){const all=dendaList(),bl=all.filter(x=>!x.lunas),ln=all.filter(x=>x.lunas);
+  return `<p style="margin:0 0 8px">Belum lunas: <b>${bl.length} denda, ${rp(sum(bl,x=>x.den))}</b> &nbsp;•&nbsp; Sudah lunas: <b>${rp(sum(ln,x=>x.den))}</b></p>`+T(['Tanggal ronda','Nama','Keterangan',{t:'Denda',c:'r'},'Status'],all.slice(0,6).map(x=>[esc(tgl(x.t)),esc(x.nama),x.st==='izin'?'Izin'+(x.lapor?'':' (belum lapor)'):'Tidak hadir',R(x.den),x.lunas?'<span class="chip h">Lunas</span>':'<span class="chip t">Belum lunas</span>']),{empty:'Belum ada denda ronda.'})+`<p style="margin:10px 0 0">${btn('lihatDenda','Lihat rekap kehadiran ronda','','kecil')}</p>`}
+act.lihatDenda=()=>{if(!menuOk('ronda'))return toast('Menu Ronda belum dibuka untuk Anda. Hubungi super user.','err');ui.page='ronda';ui.tab.ronda=subOk('ronda','rekap')?'rekap':ui.tab.ronda;render();window.scrollTo(0,0)};
 function pBeranda(){
   const s=db.settings,Y=curY(),M=curM(),L=hitungLap(Y,M),tg=tunggakanData(0),totTg=sum(tg,r=>r.total);
   const aktif=db.warga.filter(w=>!tanpaIuran(w)),paidM=new Set(db.payments.filter(p=>p.tahun===Y&&p.bulan===M).map(p=>p.wargaId)),sudah=aktif.filter(w=>paidM.has(w.id)).length;
@@ -648,7 +652,7 @@ function pBeranda(){
   return `<p class="idn"><b>${namaLing()}</b> ${esc([s.nama,s.kelurahan,s.kecamatan,s.kota].filter(Boolean).join(', '))}${s.periode?` • Periode kepengurusan ${esc(s.periode)}`:''}</p>`+banner()+
   `<div class="cols"><section class="lembar"><h3>Kas ${BULAN[M-1]} ${Y}</h3>${T(['Uraian',{t:'Jumlah',c:'r'}],[['Saldo awal bulan',R(L.awal)],['Kas masuk',R(L.masuk)],['Kas keluar',R(-L.keluar)]],{foot:['Saldo kas saat ini',R(saldoTotal())]})}<p><small>Iuran ${BULAN[M-1]}: ${sudah} dari ${aktif.length} warga sudah membayar.</small></p></section>
   <section class="lembar"><h3>Tunggakan iuran</h3><p style="margin:0 0 6px"><b>${tg.length} warga</b> menunggak, total <b>${rp(totTg)}</b>.</p>${tg.length?T(['Warga',{t:'Bulan',c:'r'},{t:'Nominal',c:'r'}],tg.slice(0,5).map(r=>[`No. ${esc(r.w.rumah)} ${esc(r.w.nama)}`,{t:r.list.length,c:'r'},R(r.total)])):'<p>Tidak ada tunggakan.</p>'}${menuOk('iuran')?btn('nav','Lihat rekap tunggakan','data-p="iuran"','kecil'):''}</section></div>
-  <section class="lembar"><h3>Transaksi terakhir</h3>${T(['Tanggal','Uraian',{t:'Masuk',c:'r'},{t:'Keluar',c:'r'}],last.map(r=>[tgl(r.tanggal),esc(r.uraian),r.jenis==='masuk'?R(r.jumlah):{t:'',c:'r'},r.jenis==='keluar'?R(r.jumlah):{t:'',c:'r'}]))}</section>
+  <section class="lembar"><h3>Denda ronda</h3>${dendaBeranda()}</section>
   ${(session.role!=='viewer')?`<div class="acts">${canEdit('iuran')?btn('bayarBaru','Catat pembayaran iuran','','utama'):''}${canEdit('kas')?btn('kasMasuk','Kas masuk')+btn('kasKeluar','Kas keluar'):''}${canEdit('ronda')?btn('absenPilih','Catat kehadiran ronda')+btn('jimpitanBaru','Catat jimpitan'):''}</div>`:''}`;
 }
 act.absenPilih=()=>{if(!canEdit('ronda')||!subOk('ronda','kehadiran'))return toast('Anda belum punya akses ke sub menu Kehadiran.','err');ui.page='ronda';ui.tab.ronda='kehadiran';render()};
