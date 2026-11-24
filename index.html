@@ -276,8 +276,9 @@ const LOGO='data:image/webp;base64,UklGRo4pAABXRUJQVlA4WAoAAAAQAAAAfwAAfwAAQUxQS
 const SYNC_DEFAULT={url:'',kode:''};
 const CFGKEY='sikas_rt_sync';
 const sync={cfg:null,state:'mati',es:null,rt:{},base:new Map(),first:true,timer:null,retry:null,rtimer:null,pushing:false};
+let logBase=null;
 function cacheLocal(){sset(KEY,JSON.stringify(db))}
-function simpan(){cacheLocal();schedulePush()}
+function simpan(){catatPerubahan();cacheLocal();schedulePush()}
 
 /* ================= data awal ================= */
 /* ===== katalog menu & sub menu. Menu/sub menu BARU yang ditambahkan nanti otomatis terkunci
@@ -291,7 +292,7 @@ const csvL=s=>(typeof s==='string'&&s)?s.split(','):[];
 function aksesData(){const a=db.settings.akses;if(a&&typeof a==='object')return{known:csvL(a.known),admin:csvL(a.admin),warga:csvL(a.warga)};return{known:KUNCI_AWAL,admin:KUNCI_AWAL,warga:KUNCI_AWAL}}
 function aksesOk(role,key){const d=aksesData();return d.known.includes(key)&&d[role].includes(key)}
 function defSettings(){return{nama:'',rt:'02',rw:'10',kelurahan:'',kecamatan:'',kota:'',alamat:'',periode:'',ketua:'',wakil:'',bendahara:'',sekretaris:'',ketuaRW:'',koordinator:'',koordinatorHp:'',iuran:50000,denda:20000,batasBayar:10,saldoAwal:0,saldoAwalTgl:'',tahunMulai:curY(),kategori:['Kebersihan & kerja bakti','Keamanan & ronda','Sosial & santunan','Perayaan & kegiatan warga','Perbaikan fasilitas','Konsumsi rapat','ATK & administrasi','Lain-lain'],kategoriMasuk:['Sumbangan warga','Donasi','Sewa aset RT','Lain-lain'],kelompok:['Kelompok 1','Kelompok 2','Kelompok 3'],sesi:['22:00–01:00','01:00–04:00'],menuTutup:[],pinSuper:'123456'}}
-function kosong(){return{v:1,settings:defSettings(),warga:[],aset:[],payments:[],kas:[],dokumen:[],anggota:[],jadwal:[]}}
+function kosong(){return{v:1,settings:defSettings(),warga:[],aset:[],payments:[],kas:[],dokumen:[],anggota:[],jadwal:[],riwayat:[]}}
 const cmpJ=(a,b,D)=>{D=D||db;const sx=D.settings.sesi;return a.tanggal.localeCompare(b.tanggal)||(sx.indexOf(a.sesi)-sx.indexOf(b.sesi))||String(a.pos).localeCompare(String(b.pos))};
 function genJadwal(D,mulai,minggu){
   const s=D.settings,kel=s.kelompok,sesi=s.sesi;if(!kel.length||!sesi.length)return 0;
@@ -335,7 +336,7 @@ let db;
 (function(){const raw=sget(KEY);try{db=raw?JSON.parse(raw):null}catch(e){db=null}
   if(!db||!db.settings){db=contoh();simpan()}
   db.settings=Object.assign(defSettings(),db.settings);
-  ['warga','aset','payments','kas','dokumen','anggota','jadwal'].forEach(k=>{if(!Array.isArray(db[k]))db[k]=[]});
+  ['warga','aset','payments','kas','dokumen','anggota','jadwal','riwayat'].forEach(k=>{if(!Array.isArray(db[k]))db[k]=[]});
 })();
 
 /* ================= sesi & ui ================= */
@@ -543,7 +544,7 @@ function loginView(){
   const s=db.settings,L=ui.login,admins=db.warga.filter(w=>w.admin).sort(byNama);
   let form='';
   if(L.mode==='super')form=`<label class="fld"><span>PIN super user</span><input id="pinIn" type="password" inputmode="numeric" autocomplete="off" autofocus></label>`;
-  if(L.mode==='admin')form=admins.length?`<label class="fld"><span>Nama admin</span><select id="adminSel">${admins.map(a=>`<option value="${a.id}">${esc(a.nama)} (No. ${esc(a.rumah)})</option>`).join('')}</select></label><label class="fld" style="margin-top:8px"><span>PIN</span><input id="pinIn" type="password" inputmode="numeric" autocomplete="off"></label>`:'<p>Belum ada admin. Minta super user menunjuk admin di menu Pengaturan.</p>';
+  if(L.mode==='admin')form=admins.length?`<label class="fld"><span>Nama admin</span><select id="adminSel">${admins.map(a=>`<option value="${a.id}">${esc(a.nama)} (No. ${esc(a.rumah)})${a.kunci?' – terkunci':''}</option>`).join('')}</select></label><label class="fld" style="margin-top:8px"><span>PIN</span><input id="pinIn" type="password" inputmode="numeric" autocomplete="off"></label>`:'<p>Belum ada admin. Minta super user menunjuk admin di menu Pengaturan.</p>';
   return `<div class="login"><div class="kartu"><div class="label"><img class="logo" src="${LOGO}" alt="Logo Graha Rafflesia RT 02 RW 10"><div class="l1">BUKU KAS</div><div class="l2">${namaLing()}</div><div class="l3">${esc(s.nama||s.kelurahan||'Kas &amp; jadwal ronda lingkungan')}</div></div>
   ${L.mode?`<div class="grid" style="display:block">${form}</div><p class="ferr">${esc(L.err||'')}</p><div class="acts"><button class="btn" data-act="pilihMode" data-m="">Kembali</button>${(L.mode==='super'||admins.length)?'<button class="btn utama" data-act="masuk">Masuk</button>':''}</div>`:
   `<div class="pilih"><button data-act="masukViewer"><b>Warga</b><span>Melihat kas, tunggakan, aset, dan jadwal ronda</span></button><button data-act="pilihMode" data-m="admin"><b>Admin</b><span>Warga yang ditunjuk: mengisi data kas, iuran, dan ronda</span></button><button data-act="pilihMode" data-m="super"><b>Super user</b><span>Mengelola semua data, admin, dan pengaturan</span></button></div>`}
@@ -555,7 +556,12 @@ act.pilihMode=d=>{ui.login={mode:d.m||null,err:''};render()};
 act.masukViewer=()=>{session={role:'viewer'};sset(SKEY,JSON.stringify(session));ui.page='utama';render()};
 act.masuk=()=>{const pin=($('#pinIn')||{}).value||'';
   if(ui.login.mode==='super'){if(pin!==db.settings.pinSuper){ui.login.err='PIN salah.';return render()}session={role:'super'}}
-  else{const id=($('#adminSel')||{}).value,w=db.warga.find(x=>x.id===id&&x.admin);if(!w||!w.pin||pin!==w.pin){ui.login.err='PIN salah.';return render()}session={role:'admin',id}}
+  else{const id=($('#adminSel')||{}).value,w=db.warga.find(x=>x.id===id&&x.admin);
+    if(!w){ui.login.err='Admin tidak ditemukan.';return render()}
+    if(w.kunci){ui.login.err='Akun terkunci karena salah PIN '+BATAS_PIN+' kali. Hubungi super user untuk reset PIN.';return render()}
+    if(!w.pin||pin!==w.pin){const k=salahPin(w);ui.login.err=k?'PIN salah '+BATAS_PIN+' kali. Akun terkunci, hubungi super user untuk reset PIN.':'PIN salah. Sisa percobaan: '+(BATAS_PIN-w.gagal)+'.';return render()}
+    session={role:'admin',id};if(w.gagal){w.gagal=0;simpan()}
+    if(w.wajibGanti)setTimeout(()=>act.gantiPinSaya({paksa:'1'}),400)}
   sset(SKEY,JSON.stringify(session));ui.login={mode:null,err:''};ui.page='utama';render();
 };
 act.keluar=()=>{session=null;sset(SKEY,'null');ui.login={mode:null,err:''};render()};
@@ -601,7 +607,7 @@ function navHTML(){
   return `<nav class="nav${ui.drawer?' buka':''}" aria-label="Menu utama"><div class="label"><img class="logo" src="${LOGO}" alt="Logo Graha Rafflesia RT 02 RW 10"><div class="l1">BUKU KAS</div><div class="l2">${namaLing()}</div><div class="l3">${esc(s.nama||s.kelurahan||'')}</div></div>
   <div class="cap">Menu Utama</div>${items}
   <div class="gap"></div>${n?`<div class="nxt">Ronda: ${esc(tglHari(n.tanggal))}<br>${hariTxt(n.hari)}</div>`:''}
-  <div class="usr">${esc(role)}<br><span class="syn ${sync.state} synT">${synLabel()}</span><br><button data-act="keluar">Keluar</button>${pasangHTML(true)}<br><small class="kredit">Created by Al_One</small></div></nav>`;
+  <div class="usr">${esc(role)}<br><span class="syn ${sync.state} synT">${synLabel()}</span>${session.role==='admin'?'<br><button data-act="gantiPinSaya">Ganti PIN saya</button>':''}<br><button data-act="keluar">Keluar</button>${pasangHTML(true)}<br><small class="kredit">Created by Al_One</small></div></nav>`;
 }
 function judulHal(){const g=INDUK[ui.page];if(!g)return PAGES[ui.page].l;const m=MENU.find(x=>x.k===g),pl=m&&m.l?m.l:(PAGES[g]?PAGES[g].l:'');return pl+' › '+PAGES[ui.page].l}
 function appbarHTML(){return `<header class="appbar"><button class="ib menuBtn" data-act="menu" aria-label="Buka menu">${IC.menu}</button><img class="logoimg" src="${LOGO}" alt=""><h1>${esc(judulHal())}</h1><button class="ib" data-act="cari" aria-label="Cari">${IC.cari}</button><button class="ib" data-act="segarkan" aria-label="Segarkan data">${IC.segar}</button></header>`}
@@ -941,18 +947,19 @@ function aksesSection(){
   rows.push(['Pengaturan',{t:'hanya super user',c:'c'},{t:'hanya super user',c:'c'}]);
   return `<section class="lembar"><h3>Akses menu dan sub menu</h3><p><small>Semua menu dan sub menu tetap terlihat oleh admin dan warga. Yang tidak dicentang bertanda 🔒 dan tidak bisa dibuka. Sub menu hanya berfungsi jika menu induknya dicentang. Menu atau sub menu baru yang ditambahkan di versi aplikasi berikutnya otomatis terkunci (bertanda Baru) sampai Anda mencentangnya di sini. Hak mengedit admin diatur terpisah di bagian Admin terpilih.</small></p>${T(['Menu / sub menu',{t:'Admin',c:'c'},{t:'Warga',c:'c'}],rows)}</section>`;
 }
-function pSetting(){
+function pSetting(){if(ui.tab.setting==='riwayat')return ph('Riwayat perubahan','Siapa mengubah apa dan kapan. Hanya terlihat oleh super user.')+tabs('setting',TAB_SET)+tabRiwayat();return pSettingUmum()}
+function pSettingUmum(){
   const s=db.settings;
   const F=(k,l,t,x)=>`<label class="fld"><span>${l}</span><input data-st="${k}" type="${t||'text'}" value="${esc(s[k])}" ${x||''}></label>`;
   const TA=(k,l,arr,h)=>`<label class="fld full"><span>${l}</span><textarea data-st="${k}" data-list="1" rows="5">${esc(arr.join('\n'))}</textarea><small>${h}</small></label>`;
   const admins=db.warga.filter(w=>w.admin).sort(byNama);
-  return ph('Pengaturan','Hanya super user yang dapat membuka halaman ini',btn('simpanSetting','Simpan pengaturan','','utama'))+
+  return ph('Pengaturan','Hanya super user yang dapat membuka halaman ini',btn('simpanSetting','Simpan pengaturan','','utama'))+tabs('setting',TAB_SET)+
   `<section class="lembar"><h3>Identitas lingkungan</h3><div class="grid">${F('nama','Nama lingkungan / perumahan')}${F('rt','RT')}${F('rw','RW')}${F('kelurahan','Kelurahan / desa')}${F('kecamatan','Kecamatan')}${F('kota','Kota / kabupaten')}${F('alamat','Alamat sekretariat')}</div></section>
   <section class="lembar"><h3>Pengurus</h3><div class="grid">${F('ketua','Ketua RT')}${F('wakil','Wakil ketua RT')}${F('bendahara','Bendahara')}${F('sekretaris','Sekretaris')}${F('ketuaRW','Ketua RW (tanda tangan "mengetahui")')}${F('periode','Periode kepengurusan (mis. 2025 – 2028)')}${F('koordinator','Koordinator ronda')}${F('koordinatorHp','HP koordinator ronda','tel')}</div></section>
   <section class="lembar"><h3>Keuangan</h3><div class="grid">${F('iuran','Iuran standar per bulan (Rp)','number','min="0"')}${F('batasBayar','Batas bayar tiap tanggal','number','min="1" max="28"')}${F('denda','Denda izin / tidak hadir ronda (Rp)','number','min="0"')}${F('saldoAwal','Saldo awal kas (Rp)','number')}${F('saldoAwalTgl','Tanggal saldo awal','date')}${F('tahunMulai','Pencatatan iuran mulai tahun','number')}${TA('kategori','Kategori pengeluaran kegiatan',s.kategori,'Satu kategori per baris.')}${TA('kategoriMasuk','Kategori penerimaan lain',s.kategoriMasuk,'Iuran bulanan dan denda ronda otomatis punya kategori sendiri.')}</div></section>
   <section class="lembar"><h3>Ronda</h3><div class="grid">${TA('kelompok','Nama kelompok ronda',s.kelompok,'Satu kelompok per baris. Mengubah nama pada baris yang sama ikut memperbarui anggota dan jadwal.')}${TA('sesi','Sesi jaga setiap Sabtu malam',s.sesi,'Satu sesi per baris, mis. 22:00–01:00. Dipakai untuk mencegah penugasan ganda.')}</div></section>
   ${aksesSection()}
-  <section class="lembar"><h3>Keamanan & admin</h3><div class="grid">${F('pinSuper','PIN super user','password','autocomplete="new-password"')}</div><h3 style="margin:16px 0 6px">Admin terpilih</h3><p><small>Semua menu terlihat oleh admin dan warga. Warga hanya melihat. Admin hanya bisa menambah, mengubah, dan menghapus di menu yang dicentang pada hak edit masing-masing.</small></p>${T(['Nama','No. rumah','Boleh mengedit',{t:'',c:'aksi'}],admins.map(w=>[esc(w.nama),esc(w.rumah),esc(hakNama(w)),{c:'aksi',t:btn('adminHak','Atur hak edit',`data-id="${w.id}"`,'kecil')+btn('adminPin','Ganti PIN',`data-id="${w.id}"`,'kecil')+btn('adminCabut','Cabut akses',`data-id="${w.id}"`,'kecil bahaya')}]),{empty:'Belum ada admin.'})}<p>${btn('adminBaru','Tunjuk admin baru')}</p><p><small>PIN hanya pengaman tampilan di perangkat ini, bukan sistem keamanan server.</small></p></section>
+  <section class="lembar"><h3>Keamanan & admin</h3><div class="grid">${F('pinSuper','PIN super user','password','autocomplete="new-password"')}</div><h3 style="margin:16px 0 6px">Admin terpilih</h3><p><small>Semua menu terlihat oleh admin dan warga. Warga hanya melihat. Admin hanya bisa menambah, mengubah, dan menghapus di menu yang dicentang pada hak edit masing-masing.</small></p>${T(['Nama','No. rumah','Boleh mengedit',{t:'',c:'aksi'}],admins.map(w=>[esc(w.nama)+(w.kunci?' <span class="chip t">Terkunci</span>':(w.gagal?' <span class="chip i">'+w.gagal+'x salah PIN</span>':'')),esc(w.rumah),esc(hakNama(w)),{c:'aksi',t:btn('adminHak','Atur hak edit',`data-id="${w.id}"`,'kecil')+btn('adminPin','Reset PIN',`data-id="${w.id}"`,'kecil')+btn('adminCabut','Cabut akses',`data-id="${w.id}"`,'kecil bahaya')}]),{empty:'Belum ada admin.'})}<p>${btn('adminBaru','Tunjuk admin baru')}</p><p><small>PIN hanya pengaman tampilan di perangkat ini, bukan sistem keamanan server.</small></p></section>
   ${syncSection()}
   <section class="lembar"><h3>Data</h3><p>Data tersimpan di browser perangkat ini. Unduh cadangan secara berkala, dan gunakan cadangan untuk memindahkan data ke perangkat lain.</p><div class="acts">${btn('cadangan','Unduh cadangan (.json)')}<label class="btn" style="cursor:pointer">Pulihkan dari cadangan<input id="pulihFile" type="file" accept="application/json,.json" hidden></label>${btn('contoh','Muat data contoh')}${btn('kosongkan','Kosongkan semua data','','bahaya')}</div></section>`;
 }
@@ -969,17 +976,70 @@ act.simpanSetting=()=>{
 ILUS.dashboard='<svg viewBox="0 0 120 120" aria-hidden="true"><rect x="12" y="16" width="96" height="76" rx="8" fill="#fff" stroke="#1F2937" stroke-width="5"/><rect x="26" y="56" width="14" height="24" fill="#4A90E2"/><rect x="48" y="42" width="14" height="38" fill="#FFB800"/><rect x="70" y="30" width="14" height="50" fill="#2FB67C"/><path d="M40 104h40M60 92v12" stroke="#1F2937" stroke-width="5" stroke-linecap="round"/></svg>';
 ILUS.setting='<svg viewBox="0 0 120 120" aria-hidden="true"><g fill="#8896A8" stroke="#1F2937" stroke-width="4" stroke-linejoin="round"><rect x=\"52\" y=\"6\" width=\"16\" height=\"24\" rx=\"3\"/><rect x=\"52\" y=\"6\" width=\"16\" height=\"24\" rx=\"3\" transform=\"rotate(45 60 60)\"/><rect x=\"52\" y=\"6\" width=\"16\" height=\"24\" rx=\"3\" transform=\"rotate(90 60 60)\"/><rect x=\"52\" y=\"6\" width=\"16\" height=\"24\" rx=\"3\" transform=\"rotate(135 60 60)\"/><rect x=\"52\" y=\"6\" width=\"16\" height=\"24\" rx=\"3\" transform=\"rotate(180 60 60)\"/><rect x=\"52\" y=\"6\" width=\"16\" height=\"24\" rx=\"3\" transform=\"rotate(225 60 60)\"/><rect x=\"52\" y=\"6\" width=\"16\" height=\"24\" rx=\"3\" transform=\"rotate(270 60 60)\"/><rect x=\"52\" y=\"6\" width=\"16\" height=\"24\" rx=\"3\" transform=\"rotate(315 60 60)\"/></g><circle cx="60" cy="60" r="34" fill="#8896A8" stroke="#1F2937" stroke-width="4"/><circle cx="60" cy="60" r="14" fill="#fff" stroke="#1F2937" stroke-width="4"/></svg>';
 act.adminBaru=()=>{openForm({title:'Tunjuk admin',init:{wargaId:'',pin:'',hak:[]},fields:[{name:'wargaId',label:'Warga',type:'select',req:true,full:true,options:[{v:'',t:'— pilih warga —'},...db.warga.filter(w=>!w.admin).sort(byNama).map(w=>({v:w.id,t:`${w.nama} (No. ${w.rumah})`}))]},{name:'pin',label:'PIN admin (min. 4 karakter)',type:'text',req:true},{name:'hak',label:'Boleh mengedit menu',type:'multicheck',options:HAK_MENU.map(([v,t])=>({v,t}))}],validate:fs=>String(fs.pin).length<4?'PIN minimal 4 karakter.':null,onSave:fs=>{const w=db.warga.find(x=>x.id===fs.wargaId);if(w){w.admin=true;w.pin=String(fs.pin);w.hak=hakStr(fs.hak)}toast('Admin ditambahkan')}})};
-act.adminPin=d=>{const w=db.warga.find(x=>x.id===d.id);openForm({title:'Ganti PIN '+(w?w.nama:''),init:{pin:''},fields:[{name:'pin',label:'PIN baru (min. 4 karakter)',type:'text',req:true}],validate:fs=>String(fs.pin).length<4?'PIN minimal 4 karakter.':null,onSave:fs=>{w.pin=String(fs.pin);toast('PIN diganti')}})};
+act.adminPin=d=>{const w=db.warga.find(x=>x.id===d.id);if(!w)return;const was=!!w.kunci;openForm({title:'Reset PIN '+w.nama,init:{pin:''},fields:[{type:'info',html:'Reset di sini jika admin lupa PIN atau akunnya terkunci karena salah PIN '+BATAS_PIN+' kali. Admin diminta membuat PIN baru saat masuk berikutnya.'},{name:'pin',label:'PIN sementara (min. 4 karakter)',type:'text',req:true}],validate:fs=>String(fs.pin).length<4?'PIN minimal 4 karakter.':null,onSave:fs=>{w.pin=String(fs.pin);w.gagal=0;w.kunci=false;w.wajibGanti=true;catatLog('keamanan','Keamanan','Reset PIN admin '+w.nama+(was?' (akun dibuka dari kunci)':''),'Super user','super');toast('PIN direset'+(was?', akun dibuka':''))}})};
 act.adminHak=d=>{const w=db.warga.find(x=>x.id===d.id);if(!w)return;openForm({title:'Hak edit: '+w.nama,init:{hak:hakList(w)},fields:[{type:'info',html:'Admin hanya bisa mengedit menu yang dicentang. Semua menu tetap terlihat dan bisa dilihat.'},{name:'hak',label:'Boleh mengedit menu',type:'multicheck',options:HAK_MENU.map(([v,t])=>({v,t}))}],onSave:fs=>{w.hak=hakStr(fs.hak);toast('Hak edit disimpan')}})};
 act.adminCabut=d=>konfirm('Cabut akses admin warga ini?',()=>{const w=db.warga.find(x=>x.id===d.id);if(w){w.admin=false;w.pin='';w.hak=''}simpan();render()},'Cabut');
 act.cadangan=()=>{unduhBlob(new Blob([JSON.stringify(db)],{type:'application/json'}),'cadangan-kas-rt-'+today()+'.json');toast('Cadangan diunduh')};
-function pulihDari(file){if(!isSuper())return toast('Pengaturan hanya bisa diubah super user.','err');const fr=new FileReader();fr.onload=()=>{try{const d=JSON.parse(fr.result);if(!d||!d.settings||!Array.isArray(d.warga))throw 0;konfirm('Ganti semua data saat ini dengan isi cadangan ini?',()=>{db=d;db.settings=Object.assign(defSettings(),db.settings);['warga','aset','payments','kas','dokumen','anggota','jadwal'].forEach(k=>{if(!Array.isArray(db[k]))db[k]=[]});simpan();render();toast('Data dipulihkan')},'Pulihkan')}catch(e){toast('File cadangan tidak valid.','err')}};fr.readAsText(file)}
+function pulihDari(file){if(!isSuper())return toast('Pengaturan hanya bisa diubah super user.','err');const fr=new FileReader();fr.onload=()=>{try{const d=JSON.parse(fr.result);if(!d||!d.settings||!Array.isArray(d.warga))throw 0;konfirm('Ganti semua data saat ini dengan isi cadangan ini?',()=>{db=d;db.settings=Object.assign(defSettings(),db.settings);['warga','aset','payments','kas','dokumen','anggota','jadwal','riwayat'].forEach(k=>{if(!Array.isArray(db[k]))db[k]=[]});simpan();render();toast('Data dipulihkan')},'Pulihkan')}catch(e){toast('File cadangan tidak valid.','err')}};fr.readAsText(file)}
 act.contoh=()=>konfirm('Ganti semua data dengan data contoh?',()=>{db=contoh();simpan();render();toast('Data contoh dimuat')},'Muat contoh');
 act.kosongkan=()=>konfirm('Hapus SEMUA data (warga, kas, ronda, file)? Pengaturan identitas ikut kembali ke awal. Unduh cadangan dulu jika perlu.',()=>{db=kosong();simpan();render();toast('Semua data dikosongkan')},'Kosongkan');
 
 /* ================= sinkronisasi antar HP (Firebase Realtime Database) ================= */
 const LIST_KEYS=['kategori','kategoriMasuk','kelompok','sesi','menuTutup'];
-const COLS=['warga','aset','payments','kas','dokumen','anggota','jadwal'];
+/* ===== Riwayat perubahan (audit) dan keamanan PIN admin ===== */
+const LOGCOLS=['warga','aset','payments','kas','dokumen','anggota','jadwal'];
+const LOG_ABAIKAN={warga:['pin','gagal','kunci','wajibGanti']};
+const LOGMAX=1200,BATAS_PIN=5;
+const FLD={nama:'nama',rumah:'no. rumah',hp:'HP',status:'status',bebas:'bebas iuran',mulai:'mulai iuran',iuran:'iuran',admin:'akses admin',hak:'hak edit',kk:'jumlah jiwa KK',alk:'anak laki-laki',apr:'anak perempuan',catatan:'catatan',jumlah:'jumlah',tanggal:'tanggal',metode:'metode',bukti:'bukti',ket:'keterangan',kategori:'kategori',uraian:'uraian',jenis:'jenis',kondisi:'kondisi',tahun:'tahun',nilai:'nilai',lokasi:'lokasi',pj:'penanggung jawab',foto:'foto',file:'file',judul:'judul',kelompok:'kelompok',peran:'peran',petugas:'petugas',koordinator:'koordinator',sesi:'sesi',pos:'pos',absen:'kehadiran',bulan:'bulan',wargaId:'warga',kode:'kode',jimpitan:'jimpitan',ortu:'orang tua'};
+function slimRec(c,r){const ab=LOG_ABAIKAN[c]||[];return JSON.parse(JSON.stringify(r,(k,v)=>ab.includes(k)?undefined:((k==='data'&&typeof v==='string'&&v.length>100)?'[file]':v)))}
+function logFlat(d){const m=new Map();Object.keys(d.settings).forEach(k=>{const j=sj(d.settings[k]);if(j!==undefined)m.set('settings/'+k,{j})});LOGCOLS.forEach(c=>(d[c]||[]).forEach(r=>{const s=slimRec(c,r);m.set(c+'/'+r.id,{j:sj(s),r:s})}));return m}
+function logSet(t){if(!logBase)return;const i=t.indexOf('/'),c=t.slice(0,i),id=t.slice(i+1);
+  if(c==='settings'){const j=sj(db.settings[id]);if(j===undefined)logBase.delete(t);else logBase.set(t,{j});return}
+  if(!LOGCOLS.includes(c))return;const r=db[c].find(x=>x.id===id);if(!r)logBase.delete(t);else{const s=slimRec(c,r);logBase.set(t,{j:sj(s),r:s})}}
+function logMenu(c,r){return{warga:'Warga',payments:'Iuran',kas:(r&&(r.jimpitan||r.kategori==='Jimpitan ronda')?'Ronda › Jimpitan':'Buku Kas'),aset:'Aset RT',dokumen:'Dokumen',anggota:'Ronda › Anggota',jadwal:'Ronda'}[c]||c}
+function logNama(c,r){switch(c){case 'warga':return r.nama+' (No. '+r.rumah+')';
+  case 'payments':{const w=db.warga.find(x=>x.id===r.wargaId);return 'Iuran '+(w?w.nama:'warga')+' '+(BULAN[r.bulan-1]||'')+' '+r.tahun+' '+rp(r.jumlah)}
+  case 'kas':return (r.uraian||'')+' '+rp(r.jumlah);case 'aset':return r.nama;case 'dokumen':return r.judul;case 'anggota':return r.nama;
+  case 'jadwal':return tgl(r.tanggal)+', sesi '+r.sesi+', '+r.pos}return ''}
+function pelaku(){if(session&&session.role==='super')return{nama:'Super user',peran:'super'};
+  if(session&&session.role==='admin'){const w=adminRec();return{nama:w?w.nama:'Admin',peran:'admin'}}
+  if(session&&session.role==='viewer')return{nama:'Warga',peran:'viewer'};return{nama:'(sistem)',peran:''}}
+function pangkasLog(){if(db.riwayat.length>LOGMAX){db.riwayat.sort((a,b)=>a.t.localeCompare(b.t));db.riwayat.splice(0,db.riwayat.length-LOGMAX+200)}}
+function catatLog(a,m,i,nama,peran){db.riwayat.push({id:uid(),t:new Date().toISOString(),o:nama,p:peran||'',a,m,i});pangkasLog()}
+function catatPerubahan(){
+  if(!logBase)return;const cur=logFlat(db),ents=[];
+  cur.forEach((e,k)=>{const o=logBase.get(k);if(!o)ents.push({k,a:'tambah',n:e});else if(o.j!==e.j)ents.push({k,a:'ubah',n:e,o})});
+  logBase.forEach((o,k)=>{if(!cur.has(k))ents.push({k,a:'hapus',o})});
+  logBase=cur;if(!ents.length)return;
+  const who=pelaku(),now=new Date().toISOString(),out=[];
+  const st=ents.filter(x=>!x.k.startsWith('settings/')),se=ents.filter(x=>x.k.startsWith('settings/'));
+  if(st.length>25){const g={};st.forEach(x=>{const k=logMenu(x.k.split('/')[0],(x.n||x.o).r)+'|'+x.a;g[k]=(g[k]||0)+1});Object.entries(g).forEach(([k,n])=>{const[m,a]=k.split('|');out.push({m,a,i:n+' data (perubahan massal)'})})}
+  else st.forEach(x=>{const c=x.k.split('/')[0],rec=(x.n||x.o).r;let info=logNama(c,rec),m=logMenu(c,rec);
+    if(x.a==='ubah'){const fs=Object.keys(Object.assign({},x.o.r,x.n.r)).filter(f=>f!=='id'&&sj(x.o.r[f])!==sj(x.n.r[f]));if(c==='jadwal'&&fs.length===1&&fs[0]==='absen')m='Ronda › Kehadiran';info+=' — ubah: '+fs.map(f=>FLD[f]||f).join(', ')}
+    out.push({m,a:x.a,i:info})});
+  if(se.length)out.push({m:'Pengaturan',a:'ubah',i:'Pengaturan: '+se.map(x=>{const k=x.k.slice(9);return k==='pinSuper'?'PIN super user':k}).join(', ')});
+  out.forEach(x=>db.riwayat.push({id:uid(),t:now,o:who.nama,p:who.peran,a:x.a,m:x.m,i:x.i}));pangkasLog();
+}
+logBase=logFlat(db);
+function salahPin(w){w.gagal=(w.gagal||0)+1;const kunci=w.gagal>=BATAS_PIN;if(kunci)w.kunci=true;
+  catatLog('keamanan','Keamanan','PIN salah ke-'+w.gagal+(kunci?'. Akun terkunci, menunggu reset super user.':''),w.nama,'admin');
+  sync.forcePush=true;simpan();return kunci}
+act.gantiPinSaya=d=>{if(!session||session.role!=='admin')return;const w=adminRec();if(!w)return;const paksa=d&&d.paksa;
+  openForm({title:paksa?'Buat PIN baru':'Ganti PIN saya',init:{lama:'',baru:'',ulang:''},
+    fields:[...(paksa?[{type:'info',cls:'warn',html:'PIN Anda baru direset super user. Buat PIN baru yang hanya Anda yang tahu.'}]:[]),{name:'lama',label:'PIN lama',type:'password',req:true},{name:'baru',label:'PIN baru (min. 4 karakter)',type:'password',req:true},{name:'ulang',label:'Ulangi PIN baru',type:'password',req:true}],
+    validate:fs=>{if(fs.lama!==w.pin){if(salahPin(w)){closeModal();toast('PIN salah '+BATAS_PIN+' kali. Akun terkunci, hubungi super user untuk reset.','err');act.keluar();return 'Akun terkunci.'}return 'PIN lama salah. Sisa percobaan: '+(BATAS_PIN-w.gagal)+'.'}
+      if(String(fs.baru).length<4)return 'PIN baru minimal 4 karakter.';if(fs.baru===fs.lama)return 'PIN baru harus berbeda dari PIN lama.';if(fs.baru!==fs.ulang)return 'Ulangi PIN baru tidak sama.';return null},
+    onSave:fs=>{w.pin=String(fs.baru);w.gagal=0;w.kunci=false;w.wajibGanti=false;catatLog('keamanan','Keamanan','Mengganti PIN sendiri',w.nama,'admin');toast('PIN berhasil diganti')}})};
+const TAB_SET=[['umum','Pengaturan'],['riwayat','Riwayat perubahan']];
+const aksiChip=a=>a==='tambah'?'<span class="chip h">Tambah</span>':a==='hapus'?'<span class="chip t">Hapus</span>':a==='keamanan'?'<span class="chip i">Keamanan</span>':'<span class="chip a">Ubah</span>';
+function wktLog(t){const d=new Date(t);return tgl(iso(d))+' '+pad(d.getHours())+':'+pad(d.getMinutes())}
+function riwayatRows(){const p=ui.f.rp||'',m=ui.f.rm||'';return db.riwayat.slice().sort((a,b)=>b.t.localeCompare(a.t)).filter(x=>(!p||x.o===p)&&(!m||x.m===m)&&match('riwayat',x.o,x.m,x.i,x.a))}
+function tblRiwayat(){const rows=riwayatRows();
+  return T(['Waktu','Oleh','Aksi','Menu','Rincian'],rows.slice(0,300).map(x=>[wktLog(x.t),`<b>${esc(x.o)}</b>${x.p?` <small>(${x.p==='super'?'super user':esc(x.p)})</small>`:''}`,aksiChip(x.a),esc(x.m),esc(x.i)]),{empty:'Belum ada catatan perubahan.'})+(rows.length>300?`<p><small>Menampilkan 300 terbaru dari ${rows.length}. Gunakan filter atau pencarian untuk mempersempit.</small></p>`:'')}
+function tabRiwayat(){ui.f.rp=ui.f.rp||'';ui.f.rm=ui.f.rm||'';
+  const nm=[...new Set(db.riwayat.map(x=>x.o))].sort((a,b)=>a.localeCompare(b,'id')),mn=[...new Set(db.riwayat.map(x=>x.m))].sort();
+  return `<section class="lembar"><div class="bar">${selF('rp',[{v:'',t:'Semua pelaku'},...nm.map(x=>({v:x,t:x}))],'Oleh')}${selF('rm',[{v:'',t:'Semua menu'},...mn.map(x=>({v:x,t:x}))],'Menu')}${cari('riwayat','Nama, menu, rincian…')}<span class="sp"></span>${expBtns('#tbl-riwayat','Riwayat perubahan','Dicetak '+tgl(today()),{land:true,ttd:false})}</div><p><small>Setiap tambah, ubah, dan hapus data dicatat bersama nama pelakunya. Nilai PIN tidak pernah dicatat. Riwayat disimpan maksimal ${LOGMAX} catatan terbaru.</small></p>${tblBox('riwayat',tblRiwayat)}</section>`}
+const COLS=['warga','aset','payments','kas','dokumen','anggota','jadwal','riwayat'];
 const RULES='{\n  "rules": {\n    ".read": false,\n    ".write": false,\n    "sikas": {\n      "$kode": { ".read": true, ".write": true }\n    }\n  }\n}';
 const arr=x=>Array.isArray(x)?x.filter(v=>v!=null):(x&&typeof x==='object'?Object.values(x):[]);
 function sj(o){if(o===null||o===undefined)return undefined;if(Array.isArray(o)){const a=o.map(sj).filter(v=>v!==undefined);return a.length?'['+a.join(',')+']':undefined}
@@ -1021,7 +1081,7 @@ function applyKey(t){
 function adoptAll(){
   const rt=sync.rt,s=Object.assign(defSettings(),rt.settings||{});if(rt.settings)LIST_KEYS.forEach(k=>{s[k]=arr(rt.settings[k])});
   const d={v:1,settings:s};COLS.forEach(c=>{d[c]=Object.entries(rt[c]||{}).filter(e=>e[1]&&typeof e[1]==='object').map(([id,r])=>normRec(c,Object.assign({},r,{id})))});
-  db=d;sync.base=flatten(db);cacheLocal();
+  db=d;sync.base=flatten(db);logBase=logFlat(db);cacheLocal();
 }
 function onSse(e){
   let m;try{m=JSON.parse(e.data)}catch(x){return}if(!m||typeof m.path!=='string')return;
@@ -1030,7 +1090,7 @@ function onSse(e){
   setState('online');const touched=new Set();
   if(e.type==='put')setAt(m.path,m.data,touched);
   else Object.keys(m.data||{}).forEach(k=>setAt((m.path==='/'?'':m.path)+'/'+k,m.data[k],touched));
-  let ch=false;touched.forEach(t=>{if(applyKey(t))ch=true});
+  let ch=false;touched.forEach(t=>{if(applyKey(t)){ch=true;logSet(t)}});
   if(ch){cacheLocal();scheduleRender()}
 }
 function scheduleRender(){clearTimeout(sync.rtimer);sync.rtimer=setTimeout(function go(){
@@ -1040,14 +1100,14 @@ function scheduleRender(){clearTimeout(sync.rtimer);sync.rtimer=setTimeout(funct
 function schedulePush(d){if(!sync.es||sync.first)return;clearTimeout(sync.timer);sync.timer=setTimeout(pushNow,d==null?500:d)}
 async function pushNow(){
   if(sync.pushing){sync.timer=setTimeout(pushNow,600);return}
-  const b=syncBase();if(!b||!session||session.role==='viewer')return;
+  const b=syncBase();if(!b||((!session||session.role==='viewer')&&!sync.forcePush))return;
   const cur=flatten(db),patch={},sent=[];
   cur.forEach((e,k)=>{const o=sync.base.get(k);if(!o||o.j!==e.j){patch[k]=e.v;sent.push(k)}});
   sync.base.forEach((o,k)=>{if(!cur.has(k)){patch[k]=null;sent.push(k)}});
   if(!sent.length)return;sync.pushing=true;
   try{const r=await fetch(b+'.json',{method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify(patch)});
     if(!r.ok)throw new Error(String(r.status));
-    sent.forEach(k=>{const e=cur.get(k);if(e)sync.base.set(k,e);else sync.base.delete(k)});setState('online')}
+    sent.forEach(k=>{const e=cur.get(k);if(e)sync.base.set(k,e);else sync.base.delete(k)});sync.forcePush=false;setState('online')}
   catch(err){const st=String(err.message);setState(st==='401'||st==='403'?'ditolak':'offline');clearTimeout(sync.retry);sync.retry=setTimeout(pushNow,6000)}
   finally{sync.pushing=false}
 }
