@@ -1197,6 +1197,7 @@ window.addEventListener('popstate',e=>{
   histPop=true;ui.page=st.p;ui.tab=Object.assign({},st.t||{});try{render()}finally{histPop=false}
   window.scrollTo(0,0)});
 try{if(navigator.storage&&navigator.storage.persist)navigator.storage.persist()}catch(e){}
+try{if('serviceWorker' in navigator&&(location.protocol==='https:'||location.hostname==='localhost'))window.addEventListener('load',()=>navigator.serviceWorker.register('sw.js').catch(()=>{}))}catch(e){}
 try{console.info('Buku Kas & Ronda RT 02/RW 10 - Created by Al_One')}catch(e){}
 histInit();
 render();
